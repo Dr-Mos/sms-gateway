@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SMS Gateway · 控制台</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600;700&display=swap');
+
+  :root {
+    --bg: #0a0e17;
+    --surface: #111827;
+    --surface2: #1a2234;
+    --surface3: #1e293b;
+    --border: #253049;
+    --border-light: #334155;
+    --text: #e2e8f0;
+    --text-dim: #64748b;
+    --text-faint: #475569;
+    --accent: #38bdf8;
+    --accent-dim: rgba(56,189,248,0.15);
+    --green: #34d399;
+    --green-dim: rgba(52,211,153,0.12);
+    --orange: #fb923c;
+    --orange-dim: rgba(251,146,60,0.12);
+    --danger: #f43f5e;
+    --danger-dim: rgba(244,63,94,0.1);
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Noto Sans SC', system-ui, sans-serif;
+    --radius: 10px;
+    --radius-lg: 14px;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    line-height: 1.6;
+  }
+
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* ── Top Bar ── */
+  .topbar {
+    position: sticky; top:0; z-index: 100;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; height: 56px;
+    background: rgba(17,24,39,0.85);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+  }
+  .topbar-left { display:flex; align-items:center; gap:12px; font-family:var(--mono); font-weight:600; font-size:15px; }
+  .topbar-left span.icon { font-size:20px; }
+  .topbar-right { display:flex; align-items:center; gap:12px; }
+
+  .status-chip {
+    display:inline-flex; align-items:center; gap:6px;
+    padding:4px 12px; font-size:12px; font-family:var(--mono);
+    border-radius:20px; font-weight:500;
+  }
+  .status-chip.online  { background:var(--green-dim); color:var(--green); }
+  .status-chip.offline { background:var(--danger-dim); color:var(--danger); }
+  .status-chip .dot { width:7px; height:7px; border-radius:50%; background:currentColor; animation:pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  .icon-btn {
+    display:inline-flex; align-items:center; justify-content:center;
+    width:36px; height:36px; border:1px solid var(--border); border-radius:8px;
+    background:transparent; color:var(--text-dim); cursor:pointer; font-size:16px;
+    transition:all 0.15s;
+  }
+  .icon-btn:hover { color:var(--text); border-color:var(--border-light); background:var(--surface2); }
+
+  /* ── Layout ── */
+  .main { max-width:1100px; margin:0 auto; padding:24px 24px 60px; }
+
+  /* ── Tabs ── */
+  .tabs {
+    display:flex; gap:4px; margin-bottom:24px;
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--radius); padding:4px;
+  }
+  .tab {
+    flex:1; padding:10px 16px; border:none; background:transparent;
+    color:var(--text-dim); font-family:var(--sans); font-size:14px; font-weight:500;
+    border-radius:8px; cursor:pointer; transition:all 0.15s; white-space:nowrap;
+  }
+  .tab:hover { color:var(--text); }
+  .tab.active { background:var(--accent-dim); color:var(--accent); }
+
+  /* ── Panels ── */
+  .panel { display:none; animation:fadeIn 0.25s ease; }
+  .panel.active { display:block; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+
+  /* ── Card ── */
+  .card {
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--radius-lg); padding:24px; margin-bottom:20px;
+  }
+  .card-title {
+    font-size:13px; font-weight:600; color:var(--text-dim);
+    text-transform:uppercase; letter-spacing:0.5px; margin-bottom:16px;
+  }
+
+  /* ── Form ── */
+  .form-group { margin-bottom:16px; }
+  .form-group label {
+    display:block; font-size:12px; font-weight:500; color:var(--text-dim);
+    margin-bottom:6px; letter-spacing:0.3px;
+  }
+  input[type="text"], input[type="password"], input[type="url"], textarea {
+    width:100%; padding:10px 14px; font-family:var(--mono); font-size:14px;
+    background:var(--surface2); border:1px solid var(--border);
+    border-radius:var(--radius); color:var(--text); outline:none;
+    transition:border-color 0.2s, box-shadow 0.2s; resize:vertical;
+  }
+  input:focus, textarea:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-dim); }
+
+  .btn {
+    display:inline-flex; align-items:center; gap:6px;
+    padding:9px 18px; font-family:var(--sans); font-size:13px; font-weight:600;
+    border:1px solid transparent; border-radius:var(--radius); cursor:pointer;
+    transition:all 0.15s;
+  }
+  .btn-primary { background:var(--accent); color:#0a0e17; }
+  .btn-primary:hover { opacity:0.88; }
+  .btn-secondary { background:var(--surface2); color:var(--text); border-color:var(--border); }
+  .btn-secondary:hover { border-color:var(--border-light); background:var(--surface3); }
+  .btn-danger { background:var(--danger-dim); color:var(--danger); border-color:rgba(244,63,94,0.2); }
+  .btn-danger:hover { background:rgba(244,63,94,0.2); }
+  .btn-sm { padding:6px 12px; font-size:12px; }
+  .btn:disabled { opacity:0.5; cursor:not-allowed; }
+  .btn-row { display:flex; gap:8px; flex-wrap:wrap; }
+
+  /* ── SMS list ── */
+  .msg-list { display:flex; flex-direction:column; gap:8px; }
+  .msg-item {
+    display:grid; grid-template-columns:auto 1fr auto; gap:14px; align-items:start;
+    padding:14px 16px; background:var(--surface2); border:1px solid var(--border);
+    border-radius:var(--radius); transition:border-color 0.15s;
+  }
+  .msg-item:hover { border-color:var(--border-light); }
+  .msg-dir {
+    display:inline-flex; align-items:center; justify-content:center;
+    width:32px; height:32px; border-radius:8px; font-size:14px; flex-shrink:0;
+  }
+  .msg-dir.in  { background:var(--green-dim); }
+  .msg-dir.out { background:var(--accent-dim); }
+  .msg-body { min-width:0; }
+  .msg-phone { font-family:var(--mono); font-size:13px; font-weight:600; color:var(--accent); }
+  .msg-text { font-size:14px; margin-top:4px; white-space:pre-wrap; word-break:break-word; }
+  .msg-meta { font-size:11px; font-family:var(--mono); color:var(--text-faint); white-space:nowrap; text-align:right; }
+  .msg-status { display:inline-block; padding:1px 6px; border-radius:4px; font-size:10px; font-weight:600; text-transform:uppercase; }
+  .msg-status.ok { background:var(--green-dim); color:var(--green); }
+  .msg-status.failed { background:var(--danger-dim); color:var(--danger); }
+
+  /* ── Webhook items ── */
+  .wh-item {
+    display:flex; align-items:center; gap:14px; padding:14px 16px;
+    background:var(--surface2); border:1px solid var(--border);
+    border-radius:var(--radius); margin-bottom:8px; transition:border-color 0.15s;
+  }
+  .wh-item:hover { border-color:var(--border-light); }
+  .wh-info { flex:1; min-width:0; }
+  .wh-name { font-weight:600; font-size:14px; }
+  .wh-url { font-family:var(--mono); font-size:12px; color:var(--text-dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .wh-actions { display:flex; gap:6px; flex-shrink:0; }
+
+  .toggle { position:relative; width:40px; height:22px; background:var(--border); border-radius:11px; cursor:pointer; transition:background 0.2s; flex-shrink:0; }
+  .toggle.on { background:var(--green); }
+  .toggle::after { content:''; position:absolute; top:3px; left:3px; width:16px; height:16px; background:white; border-radius:50%; transition:transform 0.2s; }
+  .toggle.on::after { transform:translateX(18px); }
+
+  /* ── Webhook log items ── */
+  .log-item {
+    padding:14px 16px; background:var(--surface2); border:1px solid var(--border);
+    border-radius:var(--radius); margin-bottom:8px; font-size:13px;
+  }
+  .log-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+  .log-name { font-weight:600; font-size:14px; }
+  .log-badge {
+    display:inline-block; padding:2px 8px; border-radius:4px; font-size:10px;
+    font-weight:600; text-transform:uppercase; font-family:var(--mono);
+  }
+  .log-badge.ok { background:var(--green-dim); color:var(--green); }
+  .log-badge.fail { background:var(--danger-dim); color:var(--danger); }
+  .log-badge.test { background:var(--orange-dim); color:var(--orange); }
+  .log-detail { display:grid; grid-template-columns:100px 1fr; gap:4px 12px; font-family:var(--mono); font-size:12px; color:var(--text-dim); }
+  .log-detail dt { color:var(--text-faint); }
+  .log-detail dd { color:var(--text-dim); word-break:break-all; overflow:hidden; }
+  .log-toggle-detail { margin-top:8px; cursor:pointer; font-size:11px; color:var(--accent); background:none; border:none; font-family:var(--sans); }
+  .log-extra { display:none; margin-top:10px; padding:10px; background:var(--bg); border-radius:6px; font-family:var(--mono); font-size:11px; white-space:pre-wrap; word-break:break-all; color:var(--text-dim); max-height:200px; overflow:auto; }
+  .log-extra.show { display:block; }
+
+  /* ── Modal ── */
+  .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); z-index:200; align-items:center; justify-content:center; }
+  .modal-overlay.show { display:flex; }
+  .modal { width:560px; max-width:90vw; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); padding:28px; animation:cardIn 0.25s ease; }
+  @keyframes cardIn { from{opacity:0;transform:scale(0.95)} to{opacity:1;transform:scale(1)} }
+  .modal h3 { font-size:16px; margin-bottom:20px; }
+
+  /* ── Toast ── */
+  .toast-wrap { position:fixed; top:68px; right:24px; z-index:300; display:flex; flex-direction:column; gap:8px; }
+  .toast { padding:10px 18px; border-radius:var(--radius); font-size:13px; font-weight:500; animation:toastIn 0.3s ease, toastOut 0.3s ease 2.7s forwards; max-width:360px; }
+  .toast.success { background:var(--green-dim); color:var(--green); border:1px solid rgba(52,211,153,0.2); }
+  .toast.error { background:var(--danger-dim); color:var(--danger); border:1px solid rgba(244,63,94,0.2); }
+  .toast.info { background:var(--accent-dim); color:var(--accent); border:1px solid rgba(56,189,248,0.2); }
+  @keyframes toastIn { from{opacity:0;transform:translateX(20px)} to{opacity:1;transform:translateX(0)} }
+  @keyframes toastOut { to{opacity:0;transform:translateX(20px)} }
+
+  .empty { text-align:center; padding:48px 20px; color:var(--text-dim); font-size:14px; }
+  .empty .icon { font-size:36px; margin-bottom:12px; display:block; }
+
+  .pagination { display:flex; align-items:center; justify-content:center; gap:8px; margin-top:16px; }
+  .page-info { font-size:12px; color:var(--text-dim); font-family:var(--mono); }
+
+  .setting-row { display:flex; align-items:center; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--border); }
+  .setting-row:last-child { border-bottom:none; }
+  .setting-label { font-size:14px; }
+  .setting-value { font-family:var(--mono); font-size:13px; color:var(--text-dim); }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="topbar-left"><span class="icon">📡</span> SMS Gateway</div>
+    <div class="topbar-right">
+      <div id="statusChip" class="status-chip offline"><span class="dot"></span><span id="statusText">检测中...</span></div>
+      <button class="icon-btn" onclick="refreshAll()" title="刷新">🔄</button>
+      <button class="icon-btn" onclick="logout()" title="退出">⏻</button>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="tabs">
+      <button class="tab active" data-tab="send" onclick="switchTab('send')">📤 发送短信</button>
+      <button class="tab" data-tab="inbox" onclick="switchTab('inbox')">📥 收件箱</button>
+      <button class="tab" data-tab="outbox" onclick="switchTab('outbox')">📤 发件箱</button>
+      <button class="tab" data-tab="webhooks" onclick="switchTab('webhooks')">🔗 Webhooks</button>
+      <button class="tab" data-tab="logs" onclick="switchTab('logs')">📋 执行日志</button>
+      <button class="tab" data-tab="settings" onclick="switchTab('settings')">⚙️ 设置</button>
+    </div>
+
+    <!-- ── Send SMS ── -->
+    <div id="panel-send" class="panel active">
+      <div class="card">
+        <div class="card-title">发送新短信</div>
+        <div class="form-group">
+          <label>接收号码</label>
+          <input type="text" id="sendPhone" placeholder="+8613800138000">
+        </div>
+        <div class="form-group">
+          <label>短信内容</label>
+          <textarea id="sendText" rows="4" placeholder="输入短信内容..."></textarea>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" id="sendBtn" onclick="doSend()">发送短信</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Inbox ── -->
+    <div id="panel-inbox" class="panel">
+      <div class="card">
+        <div class="card-title">收到的短信</div>
+        <div id="inboxList" class="msg-list"></div>
+        <div id="inboxPagination" class="pagination"></div>
+      </div>
+    </div>
+
+    <!-- ── Outbox ── -->
+    <div id="panel-outbox" class="panel">
+      <div class="card">
+        <div class="card-title">已发送的短信</div>
+        <div id="outboxList" class="msg-list"></div>
+        <div id="outboxPagination" class="pagination"></div>
+      </div>
+    </div>
+
+    <!-- ── Webhooks ── -->
+    <div id="panel-webhooks" class="panel">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <div class="card-title" style="margin-bottom:0;">Webhook 转发配置</div>
+          <button class="btn btn-primary btn-sm" onclick="showAddWebhook()">+ 添加</button>
+        </div>
+        <div id="webhookList"></div>
+      </div>
+    </div>
+
+    <!-- ── Webhook Logs ── -->
+    <div id="panel-logs" class="panel">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <div class="card-title" style="margin-bottom:0;">Webhook 执行日志</div>
+          <div class="btn-row">
+            <select id="logFilterWebhook" onchange="loadLogs(1)" style="padding:6px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:12px;font-family:var(--sans);">
+              <option value="">全部 Webhooks</option>
+            </select>
+            <button class="btn btn-danger btn-sm" onclick="clearLogs()">清空日志</button>
+          </div>
+        </div>
+        <div id="logList"></div>
+        <div id="logPagination" class="pagination"></div>
+      </div>
+    </div>
+
+    <!-- ── Settings ── -->
+    <div id="panel-settings" class="panel">
+      <div class="card">
+        <div class="card-title">设备状态</div>
+        <div class="setting-row">
+          <span class="setting-label">串口设备</span>
+          <span class="setting-value" id="settingDevice">-</span>
+        </div>
+        <div class="setting-row">
+          <span class="setting-label">设备状态</span>
+          <span class="setting-value" id="settingDeviceStatus">-</span>
+        </div>
+        <div class="setting-row">
+          <span class="setting-label">轮询间隔</span>
+          <span class="setting-value" id="settingPoll">-</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">说明</div>
+        <p style="font-size:13px;color:var(--text-dim);line-height:1.8;">
+          登录密码通过环境变量 <code style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-family:var(--mono);">PASSWORD</code> 设置，默认为 <code style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-family:var(--mono);">admin</code>。<br>
+          数据库文件存储在 <code style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-family:var(--mono);">data/</code> 目录下，短信和 Webhook 配置分别独立存储。
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-wrap" id="toastWrap"></div>
+
+  <!-- ── Webhook Modal ── -->
+  <div class="modal-overlay" id="whModal">
+    <div class="modal">
+      <h3 id="whModalTitle">添加 Webhook</h3>
+      <input type="hidden" id="whEditId">
+      <div class="form-group">
+        <label>名称</label>
+        <input type="text" id="whName" placeholder="例如：Bark 通知">
+      </div>
+      <div class="form-group">
+        <label>Curl 模板 <span style="color:var(--text-faint);font-weight:400;">（占位符：##FROM## ##TO## ##CONTENT##）</span></label>
+        <textarea id="whCurl" rows="6" style="font-size:12px;" placeholder='curl -X POST -H "Content-Type: application/json" -d &apos;{"title":"##FROM##","body":"##CONTENT##"}&apos; https://example.com/webhook'></textarea>
+      </div>
+      <div class="form-group">
+        <label>快捷模板</label>
+        <div class="btn-row" style="flex-wrap:wrap;">
+          <button class="btn btn-secondary btn-sm" onclick="fillPreset('bark')">Bark</button>
+          <button class="btn btn-secondary btn-sm" onclick="fillPreset('ntfy')">ntfy</button>
+          <button class="btn btn-secondary btn-sm" onclick="fillPreset('wecom')">企业微信机器人</button>
+          <button class="btn btn-secondary btn-sm" onclick="fillPreset('dingtalk')">钉钉机器人</button>
+          <button class="btn btn-secondary btn-sm" onclick="fillPreset('generic')">通用 JSON POST</button>
+        </div>
+      </div>
+      <div class="btn-row" style="margin-top:20px;">
+        <button class="btn btn-primary" onclick="saveWebhook()">保存</button>
+        <button class="btn btn-secondary" onclick="closeWhModal()">取消</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+let currentTab = 'send';
+let inboxPage = 1, outboxPage = 1, logPage = 1;
+const PER_PAGE = 20;
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + tab));
+  if (tab === 'inbox') loadMessages('incoming', inboxPage);
+  if (tab === 'outbox') loadMessages('outgoing', outboxPage);
+  if (tab === 'webhooks') loadWebhooks();
+  if (tab === 'logs') { loadLogFilter(); loadLogs(1); }
+  if (tab === 'settings') loadStatus();
+}
+
+function toast(msg, type='info') {
+  const wrap = document.getElementById('toastWrap');
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.textContent = msg;
+  wrap.appendChild(el);
+  setTimeout(() => el.remove(), 3200);
+}
+
+async function api(url, opts={}) {
+  const res = await fetch(url, { headers:{'Content-Type':'application/json', ...opts.headers}, ...opts });
+  if (res.status === 401) { window.location.href = '/login'; return null; }
+  return res.json();
+}
+
+// ── Status ──
+async function loadStatus() {
+  const data = await api('/api/status');
+  if (!data) return;
+  const chip = document.getElementById('statusChip');
+  const text = document.getElementById('statusText');
+  chip.className = data.device_available ? 'status-chip online' : 'status-chip offline';
+  text.textContent = data.device_available ? '设备在线' : '设备离线';
+  document.getElementById('settingDevice').textContent = data.device;
+  document.getElementById('settingDeviceStatus').textContent = data.device_available ? '在线 ✓' : '离线 ✗';
+  document.getElementById('settingPoll').textContent = data.poll_interval + 's';
+}
+
+// ── Send SMS ──
+async function doSend() {
+  const phone = document.getElementById('sendPhone').value.trim();
+  const text = document.getElementById('sendText').value.trim();
+  if (!phone || !text) { toast('请填写号码和内容', 'error'); return; }
+  const btn = document.getElementById('sendBtn');
+  btn.disabled = true; btn.textContent = '发送中...';
+  const data = await api('/api/sms/send', { method:'POST', body:JSON.stringify({phone, text}) });
+  btn.disabled = false; btn.textContent = '发送短信';
+  if (data?.ok) { toast('短信发送成功','success'); document.getElementById('sendText').value = ''; }
+  else toast(data?.error || '发送失败', 'error');
+}
+
+// ── Messages ──
+function renderMessages(cid, messages) {
+  const el = document.getElementById(cid);
+  if (!messages.length) { el.innerHTML = '<div class="empty"><span class="icon">📭</span>暂无短信记录</div>'; return; }
+  el.innerHTML = messages.map(m => {
+    const isIn = m.direction === 'incoming';
+    const time = new Date(m.created_at).toLocaleString('zh-CN');
+    return `<div class="msg-item">
+      <div class="msg-dir ${isIn?'in':'out'}">${isIn?'📥':'📤'}</div>
+      <div class="msg-body"><div class="msg-phone">${esc(m.phone)}</div><div class="msg-text">${esc(m.content)}</div></div>
+      <div class="msg-meta"><span class="msg-status ${m.status}">${m.status}</span><br>${time}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderPagination(cid, total, page, dir) {
+  const pages = Math.ceil(total / PER_PAGE);
+  if (pages <= 1) { document.getElementById(cid).innerHTML = ''; return; }
+  const ps = dir === 'incoming' ? 'inboxPage' : 'outboxPage';
+  let h = '';
+  if (page > 1) h += `<button class="btn btn-secondary btn-sm" onclick="${ps}=${page-1};loadMessages('${dir}',${page-1})">上一页</button>`;
+  h += `<span class="page-info">${page}/${pages} (共${total}条)</span>`;
+  if (page < pages) h += `<button class="btn btn-secondary btn-sm" onclick="${ps}=${page+1};loadMessages('${dir}',${page+1})">下一页</button>`;
+  document.getElementById(cid).innerHTML = h;
+}
+
+async function loadMessages(dir, page=1) {
+  const data = await api(`/api/sms/list?direction=${dir}&page=${page}&per_page=${PER_PAGE}`);
+  if (!data) return;
+  const isIn = dir === 'incoming';
+  renderMessages(isIn ? 'inboxList' : 'outboxList', data.messages);
+  renderPagination(isIn ? 'inboxPagination' : 'outboxPagination', data.total, data.page, dir);
+}
+
+// ── Webhooks ──
+const PRESETS = {
+  bark: `curl -X POST "https://api.day.app/YOUR_KEY_HERE/" \\\n  -H "Content-Type: application/json; charset=utf-8" \\\n  -d '{"title":"来自 ##FROM##","body":"##CONTENT##","group":"SMS"}'`,
+  ntfy: `curl -X POST \\\n  -H "Title: SMS from ##FROM##" \\\n  -d "##CONTENT##" \\\n  https://ntfy.sh/YOUR_TOPIC_HERE`,
+  wecom: `curl -X POST \\\n  -H "Content-Type: application/json" \\\n  -d '{"msgtype":"text","text":{"content":"短信通知\\n发送人: ##FROM##\\n内容: ##CONTENT##"}}' \\\n  "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=YOUR_KEY"`,
+  dingtalk: `curl -X POST \\\n  -H "Content-Type: application/json" \\\n  -d '{"msgtype":"text","text":{"content":"短信通知\\n发送人: ##FROM##\\n内容: ##CONTENT##"}}' \\\n  "https://oapi.dingtalk.com/robot/send?access_token=YOUR_TOKEN"`,
+  generic: `curl -X POST \\\n  -H "Content-Type: application/json" \\\n  -d '{"from":"##FROM##","to":"##TO##","content":"##CONTENT##"}' \\\n  "https://example.com/webhook"`,
+};
+
+function fillPreset(key) { document.getElementById('whCurl').value = PRESETS[key] || ''; }
+
+async function loadWebhooks() {
+  const data = await api('/api/webhooks');
+  if (!data) return;
+  const el = document.getElementById('webhookList');
+  if (!data.webhooks.length) { el.innerHTML = '<div class="empty"><span class="icon">🔗</span>暂未配置 Webhook<br>点击上方按钮创建</div>'; return; }
+  window._whData = {};
+  data.webhooks.forEach(w => window._whData[w.id] = w);
+  el.innerHTML = data.webhooks.map(w => {
+    const urlM = w.curl_template.match(/https?:\/\/[^\s'"\\]+/);
+    const durl = urlM ? urlM[0] : '(no URL)';
+    return `<div class="wh-item">
+      <div class="toggle ${w.enabled?'on':''}" onclick="toggleWh(${w.id},${w.enabled?0:1})"></div>
+      <div class="wh-info"><div class="wh-name">${esc(w.name)}</div><div class="wh-url">${esc(durl)}</div></div>
+      <div class="wh-actions">
+        <button class="btn btn-secondary btn-sm" onclick="testWh(${w.id})">测试</button>
+        <button class="btn btn-secondary btn-sm" onclick="editWh(${w.id})">编辑</button>
+        <button class="btn btn-danger btn-sm" onclick="delWh(${w.id},'${esc(w.name)}')">删除</button>
+      </div>
+    </div>`}).join('');
+}
+
+function showAddWebhook() {
+  document.getElementById('whEditId').value = '';
+  document.getElementById('whModalTitle').textContent = '添加 Webhook';
+  document.getElementById('whName').value = '';
+  document.getElementById('whCurl').value = '';
+  document.getElementById('whModal').classList.add('show');
+}
+function editWh(id) {
+  const w = window._whData[id]; if (!w) return;
+  document.getElementById('whEditId').value = id;
+  document.getElementById('whModalTitle').textContent = '编辑 Webhook';
+  document.getElementById('whName').value = w.name;
+  document.getElementById('whCurl').value = w.curl_template;
+  document.getElementById('whModal').classList.add('show');
+}
+function closeWhModal() { document.getElementById('whModal').classList.remove('show'); }
+
+async function saveWebhook() {
+  const id = document.getElementById('whEditId').value;
+  const name = document.getElementById('whName').value.trim();
+  const curl_template = document.getElementById('whCurl').value.trim();
+  if (!name || !curl_template) { toast('名称和模板必填','error'); return; }
+  if (id) await api(`/api/webhooks/${id}`, {method:'PUT', body:JSON.stringify({name, curl_template})});
+  else await api('/api/webhooks', {method:'POST', body:JSON.stringify({name, curl_template})});
+  closeWhModal(); toast('已保存','success'); loadWebhooks();
+}
+
+async function delWh(id, name) {
+  if (!confirm(`确定删除「${name}」？`)) return;
+  await api(`/api/webhooks/${id}`, {method:'DELETE'}); toast('已删除','success'); loadWebhooks();
+}
+async function toggleWh(id, en) { await api(`/api/webhooks/${id}`, {method:'PUT', body:JSON.stringify({enabled:!!en})}); loadWebhooks(); }
+async function testWh(id) {
+  toast('正在测试...','info');
+  const d = await api(`/api/webhooks/${id}/test`, {method:'POST'});
+  if (d?.ok) toast(`测试成功 (HTTP ${d.status_code})`,'success');
+  else toast('测试失败: '+(d?.error||'未知'), 'error');
+}
+
+// ── Webhook Logs ──
+async function loadLogFilter() {
+  const data = await api('/api/webhooks');
+  if (!data) return;
+  const sel = document.getElementById('logFilterWebhook');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">全部 Webhooks</option>';
+  data.webhooks.forEach(w => {
+    sel.innerHTML += `<option value="${w.id}">${esc(w.name)}</option>`;
+  });
+  sel.value = cur;
+}
+
+async function loadLogs(page=1) {
+  logPage = page;
+  const wid = document.getElementById('logFilterWebhook').value;
+  let url = `/api/webhook-logs?page=${page}&per_page=${PER_PAGE}`;
+  if (wid) url += `&webhook_id=${wid}`;
+  const data = await api(url);
+  if (!data) return;
+  const el = document.getElementById('logList');
+  if (!data.logs.length) { el.innerHTML = '<div class="empty"><span class="icon">📋</span>暂无执行日志</div>'; document.getElementById('logPagination').innerHTML=''; return; }
+  el.innerHTML = data.logs.map((l, idx) => {
+    const time = new Date(l.executed_at).toLocaleString('zh-CN');
+    const badge = l.trigger_type === 'test' ? 'test' : (l.success ? 'ok' : 'fail');
+    const badgeText = l.trigger_type === 'test' ? 'TEST' : (l.success ? 'OK' : 'FAIL');
+    const statusText = l.response_status ? `HTTP ${l.response_status}` : (l.error_message || 'N/A');
+    return `<div class="log-item">
+      <div class="log-header">
+        <div><span class="log-name">${esc(l.webhook_name)}</span> <span class="log-badge ${badge}">${badgeText}</span></div>
+        <span style="font-size:11px;color:var(--text-faint);font-family:var(--mono);">${time}</span>
+      </div>
+      <div class="log-detail">
+        <dt>触发</dt><dd>${esc(l.sms_phone || '-')} → ${esc(l.trigger_type)}</dd>
+        <dt>请求</dt><dd>${esc(l.request_method)} ${esc(l.request_url)}</dd>
+        <dt>状态</dt><dd>${esc(statusText)}</dd>
+      </div>
+      <button class="log-toggle-detail" onclick="toggleLogDetail(this)">展开详情 ▾</button>
+      <div class="log-extra" id="logExtra${idx}"><strong>SMS内容:</strong> ${esc(l.sms_content||'-')}\n\n<strong>请求Headers:</strong> ${esc(l.request_headers||'-')}\n\n<strong>请求Body:</strong> ${esc(l.request_body||'-')}\n\n<strong>响应Body:</strong> ${esc(l.response_body||'-')}\n\n<strong>错误信息:</strong> ${esc(l.error_message||'无')}</div>
+    </div>`}).join('');
+
+  // pagination
+  const pages = Math.ceil(data.total / PER_PAGE);
+  let ph = '';
+  if (pages > 1) {
+    if (page > 1) ph += `<button class="btn btn-secondary btn-sm" onclick="loadLogs(${page-1})">上一页</button>`;
+    ph += `<span class="page-info">${page}/${pages} (共${data.total}条)</span>`;
+    if (page < pages) ph += `<button class="btn btn-secondary btn-sm" onclick="loadLogs(${page+1})">下一页</button>`;
+  }
+  document.getElementById('logPagination').innerHTML = ph;
+}
+
+function toggleLogDetail(btn) {
+  const extra = btn.nextElementSibling;
+  const showing = extra.classList.toggle('show');
+  btn.textContent = showing ? '收起详情 ▴' : '展开详情 ▾';
+}
+
+async function clearLogs() {
+  const wid = document.getElementById('logFilterWebhook').value;
+  const msg = wid ? '确定清空当前 Webhook 的日志？' : '确定清空所有 Webhook 日志？';
+  if (!confirm(msg)) return;
+  const body = wid ? JSON.stringify({webhook_id: parseInt(wid)}) : '{}';
+  await api('/api/webhook-logs/clear', {method:'POST', body});
+  toast('日志已清空','success'); loadLogs(1);
+}
+
+// ── Misc ──
+async function logout() { await api('/api/logout',{method:'POST'}); window.location.href='/login'; }
+function refreshAll() {
+  loadStatus();
+  if (currentTab==='inbox') loadMessages('incoming',inboxPage);
+  if (currentTab==='outbox') loadMessages('outgoing',outboxPage);
+  if (currentTab==='webhooks') loadWebhooks();
+  if (currentTab==='logs') loadLogs(logPage);
+  toast('已刷新','info');
+}
+function esc(s) { if (!s) return ''; const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+loadStatus();
+setInterval(loadStatus, 15000);
+setInterval(() => { if (currentTab==='inbox') loadMessages('incoming',inboxPage); }, 20000);
+</script>
+</body>
+</html>
