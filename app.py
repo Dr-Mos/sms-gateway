@@ -13,6 +13,7 @@ import os
 import re
 import json
 import shlex
+import time
 import hashlib
 import secrets
 import logging
@@ -21,6 +22,12 @@ import subprocess
 import threading
 from datetime import datetime, timezone
 from functools import wraps
+
+try:
+    import serial
+    _serial_available = True
+except ImportError:
+    _serial_available = False
 
 import requests as http_requests
 from flask import (
@@ -34,13 +41,13 @@ from flask import (
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY") or secrets.token_hex(32)
 
-DATA_DIR = os.environ.get("DATA_DIR", "data")
-SMS_DB = os.path.join(DATA_DIR, "sms.db")
-WEBHOOK_DB = os.path.join(DATA_DIR, "webhooks.db")
+SMS_DB = "/data/sms.db"
+WEBHOOK_DB = "/data/webhooks.db"
 
-POLL_INTERVAL = int(os.environ.get("POLL_INTERVAL", "15"))
-TTY_DEVICE = os.environ.get("TTY_DEVICE", "/dev/ttyUSB1")
-GAMMU_CONFIG = os.environ.get("GAMMU_CONFIG", "/etc/gammurc")
+POLL_INTERVAL = int(os.environ.get("POLL_INTERVAL", "3"))
+TTY_SMS = os.environ.get("TTY_SMS", "/dev/ttyUSB1")
+TTY_AT = os.environ.get("TTY_AT", "")
+GAMMU_CONFIG = "/etc/gammurc"
 MODEM_PHONE = os.environ.get("MODEM_PHONE", "")
 PASSWORD = os.environ.get("PASSWORD", "admin")
 
@@ -71,7 +78,7 @@ def _connect(db_path: str) -> sqlite3.Connection:
 # ---------------------------------------------------------------------------
 
 def init_databases():
-    os.makedirs(DATA_DIR, exist_ok=True)
+    os.makedirs("/data", exist_ok=True)
 
     conn = _connect(SMS_DB)
     conn.executescript("""
@@ -151,16 +158,18 @@ def login_required(f):
 
 # All gammu operations share this lock to prevent concurrent serial port access
 _modem_lock = threading.Lock()
+# AT command port lock (independent of gammu)
+_at_lock = threading.Lock()
 
 
 def is_device_available():
-    return os.path.exists(TTY_DEVICE)
+    return os.path.exists(TTY_SMS)
 
 
 def ensure_gammu_config():
     if os.path.exists(GAMMU_CONFIG):
         return
-    cfg = f"[gammu]\ndevice = {TTY_DEVICE}\nconnection = at\n"
+    cfg = f"[gammu]\ndevice = {TTY_SMS}\nconnection = at\n"
     os.makedirs(os.path.dirname(GAMMU_CONFIG) or ".", exist_ok=True)
     with open(GAMMU_CONFIG, "w") as f:
         f.write(cfg)
@@ -177,7 +186,7 @@ def _has_non_ascii(text: str) -> bool:
 
 def send_sms(phone: str, text: str) -> dict:
     if not is_device_available():
-        return {"success": False, "error": f"Device {TTY_DEVICE} not available"}
+        return {"success": False, "error": f"Device {TTY_SMS} not available"}
     ensure_gammu_config()
     cmd = ["gammu", "-c", GAMMU_CONFIG, "sendsms", "TEXT", phone]
     if _has_non_ascii(text):
@@ -212,7 +221,12 @@ def fetch_all_sms() -> list:
                 capture_output=True, text=True, timeout=60,
             )
             if proc.returncode != 0:
-                log.warning("gammu getallsms failed: %s", proc.stderr.strip())
+                output = proc.stdout + proc.stderr
+                if "Error opening device" in output:
+                    log.info("gammu: device busy or unavailable (%s)", proc.stdout.strip())
+                else:
+                    log.warning("gammu getallsms failed (rc=%d): %s",
+                                proc.returncode, (proc.stdout + proc.stderr).strip())
                 return []
         except Exception as e:
             log.warning("Failed to run gammu getallsms: %s", e)
@@ -353,24 +367,80 @@ def delete_sms(location: str):
             log.warning("Failed to delete SMS at location %s: %s", location, e)
 
 
-def clear_modem_sms() -> dict:
-    """Delete ALL SMS from modem storage. Manual operation only."""
-    if not is_device_available():
-        return {"success": False, "error": f"Device {TTY_DEVICE} not available"}
-    ensure_gammu_config()
-    with _modem_lock:
+
+# ---------------------------------------------------------------------------
+# AT command helpers
+# ---------------------------------------------------------------------------
+
+def get_modem_status() -> dict:
+    """Query modem status via AT commands. Opens serial port once for all queries."""
+    if not _serial_available or not TTY_AT or not os.path.exists(TTY_AT):
+        return {"available": False}
+
+    def _query(ser, command):
+        """Send one AT command on an already-open serial port, return response text."""
         try:
-            proc = subprocess.run(
-                ["gammu", "-c", GAMMU_CONFIG, "deleteallsms", "1"],
-                capture_output=True, text=True, timeout=60,
-            )
-            if proc.returncode == 0:
-                log.info("All SMS deleted from modem")
-                return {"success": True}
-            else:
-                return {"success": False, "error": proc.stderr.strip()}
+            ser.reset_input_buffer()
+            time.sleep(0.05)
+            ser.write((command + "\r\n").encode())
+            lines = []
+            deadline = time.monotonic() + 3.0
+            while time.monotonic() < deadline:
+                line = ser.readline()
+                if line:
+                    lines.append(line)
+                    combined = b"".join(lines)
+                    if b"OK\r\n" in combined or b"ERROR" in combined:
+                        break
+                else:
+                    break  # readline timed out
+            resp = b"".join(lines).decode("utf-8", errors="replace").strip()
+            log.info("AT %s → %s", command, resp.replace("\r\n", " ") if resp else "(empty)")
+            return resp
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            log.warning("AT %s → error: %s", command, e)
+            return ""
+
+    result = {"available": True}
+    with _at_lock:
+        try:
+            with serial.Serial(TTY_AT, baudrate=115200, timeout=1) as ser:
+                csq = _query(ser, "AT+CSQ")
+                m = re.search(r"\+CSQ:\s*(\d+),", csq)
+                if m:
+                    n = int(m.group(1))
+                    result["signal_raw"] = n
+                    result["signal_dbm"] = (-113 + n * 2) if n < 99 else None
+                    result["signal_pct"] = min(100, int((n / 31) * 100)) if n < 99 else 0
+
+                creg = _query(ser, "AT+CREG?")
+                m = re.search(r"\+CREG:\s*\d+,(\d+)", creg)
+                if m:
+                    stat = int(m.group(1))
+                    reg_map = {0: "未注册", 1: "已注册（本地）", 2: "搜索中",
+                               3: "被拒绝", 5: "已注册（漫游）"}
+                    result["network_stat"] = stat
+                    result["network_status"] = reg_map.get(stat, f"未知({stat})")
+                    result["network_registered"] = stat in (1, 5)
+
+                cops = _query(ser, "AT+COPS?")
+                m = re.search(r'\+COPS:\s*\d+,\d+,"([^"]+)"', cops)
+                result["operator"] = m.group(1) if m else ""
+
+                cpin = _query(ser, "AT+CPIN?")
+                m = re.search(r"\+CPIN:\s*(\S+)", cpin)
+                result["sim_status"] = m.group(1) if m else ""
+                result["sim_ready"] = result["sim_status"] == "READY"
+
+                cgsn = _query(ser, "AT+CGSN")
+                m = re.search(r"(\d{15})", cgsn)
+                result["imei"] = m.group(1) if m else ""
+
+        except Exception as e:
+            log.warning("AT port open failed: %s", e)
+            return {"available": False}
+
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -933,20 +1003,18 @@ def api_status():
         msgs = fetch_all_sms()
         modem_count = len(msgs) if msgs is not None else None
     return jsonify({
-        "ok": True, "device": TTY_DEVICE,
+        "ok": True, "device": TTY_SMS,
         "device_available": is_device_available(),
         "poll_interval": POLL_INTERVAL,
         "modem_sms_count": modem_count,
     })
 
 
-@app.route("/api/modem/clear-sms", methods=["POST"])
+
+@app.route("/api/modem/status", methods=["GET"])
 @login_required
-def api_clear_modem_sms():
-    result = clear_modem_sms()
-    if result["success"]:
-        return jsonify({"ok": True, "message": "Modem 短信已清空"})
-    return jsonify({"ok": False, "error": result.get("error", "清空失败")}), 500
+def api_modem_at_status():
+    return jsonify(get_modem_status())
 
 
 # ---------------------------------------------------------------------------
@@ -956,9 +1024,11 @@ def api_clear_modem_sms():
 init_databases()
 ensure_gammu_config()
 
-if os.environ.get("WERKZEUG_RUN_MAIN") == "true" or not app.debug:
+_flask_debug = os.environ.get("FLASK_DEBUG", "0") in ("1", "true")
+_in_reloader_parent = os.environ.get("WERKZEUG_RUN_MAIN") is None and _flask_debug
+if not _in_reloader_parent:
     poller = SMSPoller(interval=POLL_INTERVAL)
     poller.start()
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=_flask_debug)

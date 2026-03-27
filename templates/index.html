@@ -243,7 +243,7 @@
       <button class="tab" data-tab="outbox" onclick="switchTab('outbox')">📤 发件箱</button>
       <button class="tab" data-tab="webhooks" onclick="switchTab('webhooks')">🔗 Webhooks</button>
       <button class="tab" data-tab="logs" onclick="switchTab('logs')">📋 执行日志</button>
-      <button class="tab" data-tab="settings" onclick="switchTab('settings')">⚙️ 设置</button>
+      <button class="tab" data-tab="modem" onclick="switchTab('modem')">📶 Modem 状态</button>
     </div>
 
     <!-- ── Send SMS ── -->
@@ -310,12 +310,19 @@
       </div>
     </div>
 
-    <!-- ── Settings ── -->
-    <div id="panel-settings" class="panel">
+    <!-- ── Modem 状态 ── -->
+    <div id="panel-modem" class="panel">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <div class="card-title" style="margin-bottom:0;">Modem 信息</div>
+          <button class="btn btn-secondary btn-sm" onclick="loadModem()">刷新</button>
+        </div>
+        <div id="modemAtContent"><div style="color:var(--text-dim);font-size:13px;">加载中...</div></div>
+      </div>
       <div class="card">
         <div class="card-title">设备状态</div>
         <div class="setting-row">
-          <span class="setting-label">串口设备</span>
+          <span class="setting-label">短信串口 (TTY_DEVICE)</span>
           <span class="setting-value" id="settingDevice">-</span>
         </div>
         <div class="setting-row">
@@ -326,13 +333,10 @@
           <span class="setting-label">轮询间隔</span>
           <span class="setting-value" id="settingPoll">-</span>
         </div>
-      </div>
-      <div class="card">
-        <div class="card-title">说明</div>
-        <p style="font-size:13px;color:var(--text-dim);line-height:1.8;">
-          登录密码通过环境变量 <code style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-family:var(--mono);">PASSWORD</code> 设置，默认为 <code style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-family:var(--mono);">admin</code>。<br>
-          数据库文件存储在 <code style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-family:var(--mono);">data/</code> 目录下，短信和 Webhook 配置分别独立存储。
-        </p>
+        <div class="setting-row">
+          <span class="setting-label">Modem 存储短信数</span>
+          <span class="setting-value" id="settingModemCount">-</span>
+        </div>
       </div>
     </div>
   </div>
@@ -382,7 +386,7 @@ function switchTab(tab) {
   if (tab === 'outbox') loadMessages('outgoing', outboxPage);
   if (tab === 'webhooks') loadWebhooks();
   if (tab === 'logs') { loadLogFilter(); loadLogs(1); }
-  if (tab === 'settings') loadStatus();
+  if (tab === 'modem') loadModem();
 }
 
 function toast(msg, type='info') {
@@ -411,6 +415,55 @@ async function loadStatus() {
   document.getElementById('settingDevice').textContent = data.device;
   document.getElementById('settingDeviceStatus').textContent = data.device_available ? '在线 ✓' : '离线 ✗';
   document.getElementById('settingPoll').textContent = data.poll_interval + 's';
+  const cnt = data.modem_sms_count;
+  document.getElementById('settingModemCount').textContent = cnt != null ? cnt + ' 条' : '-';
+}
+
+// ── Modem AT Status ──
+async function loadModem() {
+  loadStatus();
+  const data = await api('/api/modem/status');
+  if (!data) return;
+  renderModemAt(data);
+}
+
+function renderModemAt(data) {
+  const el = document.getElementById('modemAtContent');
+  if (!data.available) {
+    el.innerHTML = '<div style="background:var(--orange-dim);border:1px solid rgba(251,146,60,0.25);border-radius:var(--radius);padding:12px 16px;color:var(--orange);font-size:13px;">⚠️ TTY_AT 未配置或设备不可用。请在容器环境变量中设置 <code style="font-family:var(--mono);">TTY_AT</code>（E3372 通常为 <code style="font-family:var(--mono);">/dev/ttyUSB0</code>）并重启容器。</div>';
+    return;
+  }
+  const sigPct = data.signal_pct ?? 0;
+  const sigDbm = data.signal_dbm != null ? data.signal_dbm + ' dBm' : 'N/A';
+  const sigColor = sigPct > 60 ? 'var(--green)' : sigPct > 30 ? 'var(--orange)' : 'var(--danger)';
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+      <div>
+        <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">信号强度</div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="flex:1;height:8px;background:var(--surface3);border-radius:4px;overflow:hidden;">
+            <div style="height:100%;width:${sigPct}%;background:${sigColor};border-radius:4px;transition:width 0.5s;"></div>
+          </div>
+          <span style="font-family:var(--mono);font-size:12px;color:var(--text-dim);white-space:nowrap;">${esc(sigDbm)}</span>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">网络注册</div>
+        <span style="font-size:13px;color:${data.network_registered ? 'var(--green)' : 'var(--orange)'};">${esc(data.network_status || 'N/A')}</span>
+      </div>
+      <div>
+        <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">运营商</div>
+        <span style="font-family:var(--mono);font-size:13px;">${esc(data.operator || '-')}</span>
+      </div>
+      <div>
+        <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">SIM 状态</div>
+        <span style="font-size:13px;color:${data.sim_ready ? 'var(--green)' : 'var(--danger)'};">${esc(data.sim_status || '-')}</span>
+      </div>
+      <div>
+        <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">IMEI</div>
+        <span style="font-family:var(--mono);font-size:12px;color:var(--text-dim);">${esc(data.imei || '-')}</span>
+      </div>
+    </div>`;
 }
 
 // ── Send SMS ──
@@ -606,6 +659,7 @@ function refreshAll() {
   if (currentTab==='outbox') loadMessages('outgoing',outboxPage);
   if (currentTab==='webhooks') loadWebhooks();
   if (currentTab==='logs') loadLogs(logPage);
+  if (currentTab==='modem') loadModem();
   toast('已刷新','info');
 }
 function esc(s) { if (!s) return ''; const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
@@ -613,6 +667,7 @@ function esc(s) { if (!s) return ''; const d=document.createElement('div'); d.te
 loadStatus();
 setInterval(loadStatus, 15000);
 setInterval(() => { if (currentTab==='inbox') loadMessages('incoming',inboxPage); }, 20000);
+setInterval(() => { if (currentTab==='modem') loadModem(); }, 30000);
 </script>
 </body>
 </html>

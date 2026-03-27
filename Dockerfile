@@ -18,10 +18,9 @@ COPY templates/ templates/
 
 VOLUME ["/data"]
 
-ENV DATA_DIR=/data \
-    GAMMU_CONFIG=/etc/gammurc \
-    TTY_DEVICE=/dev/ttyUSB1 \
-    POLL_INTERVAL=15 \
+ENV TTY_SMS=/dev/ttyUSB1 \
+    TTY_AT="" \
+    POLL_INTERVAL=3 \
     PASSWORD=admin \
     MODEM_PHONE="" \
     SECRET_KEY=""

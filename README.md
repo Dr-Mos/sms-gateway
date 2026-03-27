@@ -4,12 +4,15 @@
 
 适用于 Huawei E3372 等 USB modem，可部署在 Unraid、树莓派或任何 Linux 主机上。
 
+> **关于本项目**：由人类设计、规划并主导开发，代码实现由 [Claude](https://claude.ai)（Anthropic）在人类的持续指导和审查下完成。
+
 ## 功能
 
 - **发送短信** — 支持中文等 Unicode 内容，自动处理编码
 - **接收短信** — 后台轮询 modem，自动入库，支持长短信（分段短信）自动拼接
 - **Webhook 转发** — 收到新短信后通过自定义 curl 模板转发到 Bark、ntfy、企业微信、钉钉等任意平台
 - **Webhook 执行日志** — 完整记录每次 webhook 的请求、响应和错误信息
+- **Modem 状态** — 通过 AT 命令实时显示信号强度、网络注册状态、运营商、SIM 状态、IMEI
 - **密码保护** — 简易登录，密码通过环境变量配置
 - **设备热插拔** — ttyUSB 设备可随时插拔，恢复后自动继续工作
 - **数据安全** — 指纹去重机制，确保短信不丢失、不重复；数据库分库存储
@@ -31,7 +34,6 @@ docker run -d \
   -v /dev:/dev:ro \
   --device-cgroup-rule='c 188:* rmw' \
   -e PASSWORD=your-password \
-  -e POLL_INTERVAL=3 \
   sms-gateway
 ```
 
@@ -47,7 +49,6 @@ docker-compose up -d --build
 
 ```env
 PASSWORD=your-password
-POLL_INTERVAL=3
 SECRET_KEY=a-random-string
 MODEM_PHONE=+8613800001111
 ```
@@ -64,12 +65,11 @@ PASSWORD=admin POLL_INTERVAL=3 python app.py
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `PASSWORD` | `admin` | 登录密码 |
-| `TTY_DEVICE` | `/dev/ttyUSB1` | Modem 串口设备路径 |
-| `POLL_INTERVAL` | `15` | 轮询新短信的间隔（秒） |
+| `TTY_SMS` | `/dev/ttyUSB1` | 短信收发串口（gammu 使用，E3372 通常为 ttyUSB1） |
+| `TTY_AT` | 空 | AT 命令查询串口，用于读取信号、运营商等状态（E3372 通常为 `/dev/ttyUSB0`），不设则 Modem 状态页信息不可用 |
+| `POLL_INTERVAL` | `3` | 轮询新短信的间隔（秒） |
 | `SECRET_KEY` | 自动生成 | Flask session 密钥，不设则每次重启后需重新登录 |
 | `MODEM_PHONE` | 空 | Modem 的手机号码，用于 Webhook 模板中的 `##TO##` 占位符 |
-| `DATA_DIR` | `data` | 数据库文件存储目录 |
-| `GAMMU_CONFIG` | `/etc/gammurc` | Gammu 配置文件路径，不存在会自动生成 |
 
 ## 设备热插拔
 
@@ -129,7 +129,7 @@ curl -X POST -H "Content-Type: application/json" -d '{"msgtype":"text","text":{"
 
 ### SIM 卡存储管理
 
-SIM 卡短信存储空间有限（通常 50 条），存满后无法接收新短信。系统在轮询时会自动删除已确认写入数据库的短信，释放 SIM 卡空间。设置页面也提供手动清空按钮。
+SIM 卡短信存储空间有限（通常 50 条），存满后无法接收新短信。系统在轮询时会自动删除已确认写入数据库的短信，释放 SIM 卡空间。
 
 ## 数据存储
 
@@ -182,7 +182,7 @@ SIM 卡短信存储空间有限（通常 50 条），存满后无法接收新短
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | GET | `/api/status` | 设备状态、modem 短信数量、轮询间隔 |
-| POST | `/api/modem/clear-sms` | 清空 modem 中所有短信 |
+| GET | `/api/modem/status` | AT 命令查询：信号强度、网络注册、运营商、SIM 状态、IMEI |
 
 ## E3372 部署说明
 

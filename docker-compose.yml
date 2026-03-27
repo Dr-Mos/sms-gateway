@@ -11,10 +11,9 @@ services:
     device_cgroup_rules:
       - 'c 188:* rmw'
     environment:
-      - TTY_DEVICE=/dev/ttyUSB1
-      - POLL_INTERVAL=${POLL_INTERVAL:-15}
+      - TTY_SMS=${TTY_SMS:-/dev/ttyUSB1}
+      - TTY_AT=${TTY_AT:-}
+      - POLL_INTERVAL=${POLL_INTERVAL:-3}
       - PASSWORD=${PASSWORD:-admin}
       - SECRET_KEY=${SECRET_KEY:-}
       - MODEM_PHONE=${MODEM_PHONE:-}
-      - DATA_DIR=/data
-      - GAMMU_CONFIG=/etc/gammurc
