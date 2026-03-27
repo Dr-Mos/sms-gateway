@@ -1,31 +1,33 @@
 # SMS Gateway
 
-基于 GSM Modem + Gammu 的短信收发网关，提供 Web 管理界面和 Webhook 转发能力。
+An SMS send/receive gateway based on GSM Modem + Gammu, with a web management interface and webhook forwarding.
 
-适用于 Huawei E3372 等 USB modem，可部署在 Unraid、树莓派或任何 Linux 主机上。
+Compatible with Huawei E3372 and similar USB modems. Deployable on Unraid, Raspberry Pi, or any Linux host.
 
-> **关于本项目**：由人类设计、规划并主导开发，代码实现由 [Claude](https://claude.ai)（Anthropic）在人类的持续指导和审查下完成。
+> **About this project**: Designed, planned, and led by a human; code implemented by [Claude](https://claude.ai) (Anthropic) under continuous human guidance and review.
 
-## 功能
+[中文文档](README.zh-CN.md)
 
-- **发送短信** — 支持中文等 Unicode 内容，自动处理编码
-- **接收短信** — 后台轮询 modem，自动入库，支持长短信（分段短信）自动拼接
-- **Webhook 转发** — 收到新短信后通过自定义 curl 模板转发到 Bark、ntfy、企业微信、钉钉等任意平台
-- **Webhook 执行日志** — 完整记录每次 webhook 的请求、响应和错误信息
-- **Modem 状态** — 通过 AT 命令实时显示信号强度、网络注册状态、运营商、SIM 状态、IMEI
-- **密码保护** — 简易登录，密码通过环境变量配置
-- **设备热插拔** — ttyUSB 设备可随时插拔，恢复后自动继续工作
-- **数据安全** — 指纹去重机制，确保短信不丢失、不重复；数据库分库存储
+## Features
 
-## 快速开始
+- **Send SMS** — Unicode support (Chinese, Japanese, etc.) with automatic encoding handling
+- **Receive SMS** — Background polling of modem, auto-stored to database, automatic reassembly of multi-part messages
+- **Webhook forwarding** — Forward incoming SMS to Bark, ntfy, WeCom, DingTalk, or any platform via custom curl templates
+- **Webhook logs** — Full record of every webhook request, response, and error
+- **Modem status** — Real-time signal strength, network registration, operator, SIM status, and IMEI via AT commands
+- **Password protection** — Simple login with password configured via environment variable
+- **Hot-plug support** — ttyUSB devices can be connected/disconnected at any time; polling resumes automatically
+- **Data integrity** — SHA-256 fingerprint deduplication ensures no messages are lost or duplicated; separate databases for SMS and webhooks
 
-### Docker 部署（推荐）
+## Quick Start
+
+### Docker (recommended)
 
 ```bash
-# 构建镜像
+# Build image
 docker build -t sms-gateway .
 
-# 运行
+# Run
 docker run -d \
   --name sms-gateway \
   --restart unless-stopped \
@@ -37,7 +39,7 @@ docker run -d \
   sms-gateway
 ```
 
-访问 `http://<host-ip>:5000`，输入密码登录。
+Open `http://<host-ip>:5000` and log in with your password.
 
 ### Docker Compose
 
@@ -45,7 +47,7 @@ docker run -d \
 docker-compose up -d --build
 ```
 
-可创建 `.env` 文件配置参数：
+Create a `.env` file to configure parameters:
 
 ```env
 PASSWORD=your-password
@@ -53,166 +55,166 @@ SECRET_KEY=a-random-string
 MODEM_PHONE=+8613800001111
 ```
 
-### 本地开发
+### Local Development
 
 ```bash
 pip install -r requirements.txt
 PASSWORD=admin POLL_INTERVAL=3 python app.py
 ```
 
-## 环境变量
+## Environment Variables
 
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| `PASSWORD` | `admin` | 登录密码 |
-| `TTY_SMS` | `/dev/ttyUSB1` | 短信收发串口（gammu 使用，E3372 通常为 ttyUSB1） |
-| `TTY_AT` | 空 | AT 命令查询串口，用于读取信号、运营商等状态（E3372 通常为 `/dev/ttyUSB0`），不设则 Modem 状态页信息不可用 |
-| `POLL_INTERVAL` | `3` | 轮询新短信的间隔（秒） |
-| `SECRET_KEY` | 自动生成 | Flask session 密钥，不设则每次重启后需重新登录 |
-| `MODEM_PHONE` | 空 | Modem 的手机号码，用于 Webhook 模板中的 `##TO##` 占位符 |
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PASSWORD` | `admin` | Login password |
+| `TTY_SMS` | `/dev/ttyUSB1` | SMS serial port used by gammu (E3372 is typically ttyUSB1) |
+| `TTY_AT` | *(empty)* | AT command serial port for signal/operator status queries (E3372 is typically `/dev/ttyUSB0`); Modem status page is unavailable if not set |
+| `POLL_INTERVAL` | `3` | SMS polling interval in seconds |
+| `SECRET_KEY` | *(auto-generated)* | Flask session key; if not set, users must re-login after each restart |
+| `MODEM_PHONE` | *(empty)* | Modem's phone number, used as `##TO##` placeholder in webhook templates |
 
-## 设备热插拔
+## Hot-Plug Support
 
-Docker 部署时通过 `-v /dev:/dev:ro` 加 `--device-cgroup-rule='c 188:* rmw'` 实现热插拔支持，无需 `--privileged`。`188` 是 Linux 中 ttyUSB 设备的固定主设备号，此配置仅开放 ttyUSB 类设备的访问权限。
+Docker deployment uses `-v /dev:/dev:ro` combined with `--device-cgroup-rule='c 188:* rmw'` for hot-plug support without requiring `--privileged`. `188` is the fixed major device number for ttyUSB devices in Linux; this configuration grants access only to ttyUSB-class devices.
 
-设备不在时轮询自动跳过，设备恢复后自动继续工作。
+When the device is absent, polling is automatically skipped and resumes when the device reconnects.
 
-## Webhook 配置
+## Webhook Configuration
 
-Webhook 使用 curl 命令模板，支持三个占位符：
+Webhooks use curl command templates with three placeholders:
 
-| 占位符 | 说明 |
-|--------|------|
-| `##FROM##` | 发送人号码 |
-| `##TO##` | 接收端号码（即 modem 号码，取自 `MODEM_PHONE` 环境变量） |
-| `##CONTENT##` | 短信内容 |
+| Placeholder | Description |
+|-------------|-------------|
+| `##FROM##` | Sender's phone number |
+| `##TO##` | Recipient number (the modem's own number, from `MODEM_PHONE`) |
+| `##CONTENT##` | SMS message content |
 
-### 示例模板
+### Example Templates
 
-**Bark：**
+**Bark:**
 
 ```
-curl -X POST "https://api.day.app/YOUR_KEY/" -H "Content-Type: application/json; charset=utf-8" -d '{"body":"##CONTENT##","title":"来自 ##FROM##","group":"SMS"}'
+curl -X POST "https://api.day.app/YOUR_KEY/" -H "Content-Type: application/json; charset=utf-8" -d '{"body":"##CONTENT##","title":"From ##FROM##","group":"SMS"}'
 ```
 
-**ntfy：**
+**ntfy:**
 
 ```
 curl -X POST -H "Title: SMS from ##FROM##" -d "##CONTENT##" https://ntfy.sh/YOUR_TOPIC
 ```
 
-**企业微信机器人：**
+**WeCom Bot:**
 
 ```
-curl -X POST -H "Content-Type: application/json" -d '{"msgtype":"text","text":{"content":"短信通知\n发送人: ##FROM##\n内容: ##CONTENT##"}}' "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=YOUR_KEY"
+curl -X POST -H "Content-Type: application/json" -d '{"msgtype":"text","text":{"content":"SMS\nFrom: ##FROM##\nContent: ##CONTENT##"}}' "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=YOUR_KEY"
 ```
 
-模板支持多行（反斜杠续行）和 bash `$'...'` 引号语法。建议写成单行以避免解析问题。
+Templates support multi-line (backslash continuation) and bash `$'...'` quoting. Single-line is recommended to avoid parsing issues.
 
-## 短信处理机制
+## SMS Processing
 
-### 指纹去重
+### Fingerprint Deduplication
 
-每条短信根据发送号码、发送时间、内容（及分段信息）生成 SHA-256 指纹，数据库中建有唯一索引。重复短信自动跳过，确保：
+Each message generates a SHA-256 fingerprint from sender number, timestamp, content, and part information, with a unique index in the database. Duplicates are silently skipped, ensuring:
 
-- 服务重启不会重复导入
-- 数据库写入失败时短信不会丢失（下次轮询会重试）
-- 首次启动时 modem 中已有的短信会被完整导入
+- No re-import on service restart
+- No message loss on database write failure (retried on next poll)
+- Full import of messages already on the modem at first start
 
-### 长短信拼接
+### Multi-Part SMS Reassembly
 
-运营商会将超长短信拆分为多个 part 分别发送。系统会：
+Carriers split long messages into multiple parts sent separately. The system:
 
-1. 将每个 part 原样存入数据库，保留原始数据
-2. 检测到同一组分段短信的所有 part 齐全后，拼接内容发送一次 Webhook
-3. Web 页面自动将同组 part 拼接展示为一条完整短信
+1. Stores each part as-is in the database, preserving raw data
+2. Detects when all parts of a group are complete, then assembles and sends a single webhook
+3. Displays all parts of a group as one complete message in the web UI
 
-### SIM 卡存储管理
+### SIM Storage Management
 
-SIM 卡短信存储空间有限（通常 50 条），存满后无法接收新短信。系统在轮询时会自动删除已确认写入数据库的短信，释放 SIM 卡空间。
+SIM card storage is limited (typically 50 messages); new messages cannot be received when full. The system automatically deletes messages confirmed as written to the database during each poll cycle, freeing SIM storage.
 
-## 数据存储
+## Data Storage
 
-数据分两个 SQLite 数据库独立存储：
+Data is stored in two independent SQLite databases:
 
-| 文件 | 内容 |
-|------|------|
-| `data/sms.db` | 收发短信记录 |
-| `data/webhooks.db` | Webhook 配置和执行日志 |
+| File | Contents |
+|------|----------|
+| `data/sms.db` | Sent and received SMS records |
+| `data/webhooks.db` | Webhook configurations and execution logs |
 
-分库设计使得修改某一部分的表结构时不影响另一部分的数据。
+The split design means changes to one schema do not affect data in the other.
 
-## API 接口
+## API Reference
 
-所有 API 需要先通过 `/api/login` 认证获取 session。
+All API endpoints require authentication via `/api/login` first.
 
-### 认证
+### Auth
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| POST | `/api/login` | 登录，body: `{"password":"xxx"}` |
-| POST | `/api/logout` | 退出登录 |
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/login` | Login, body: `{"password":"xxx"}` |
+| POST | `/api/logout` | Logout |
 
-### 短信
+### SMS
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| POST | `/api/sms/send` | 发送短信，body: `{"phone":"+86...","text":"内容"}` |
-| GET | `/api/sms/list` | 短信列表，参数: `direction`, `page`, `per_page` |
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/sms/send` | Send SMS, body: `{"phone":"+1...","text":"content"}` |
+| GET | `/api/sms/list` | List messages, params: `direction`, `page`, `per_page` |
 
-### Webhook
+### Webhooks
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/api/webhooks` | 列出所有 webhook |
-| POST | `/api/webhooks` | 创建，body: `{"name":"...","curl_template":"..."}` |
-| PUT | `/api/webhooks/<id>` | 更新 |
-| DELETE | `/api/webhooks/<id>` | 删除（同时删除相关日志） |
-| POST | `/api/webhooks/<id>/test` | 发送测试请求 |
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/webhooks` | List all webhooks |
+| POST | `/api/webhooks` | Create, body: `{"name":"...","curl_template":"..."}` |
+| PUT | `/api/webhooks/<id>` | Update |
+| DELETE | `/api/webhooks/<id>` | Delete (also removes related logs) |
+| POST | `/api/webhooks/<id>/test` | Send a test request |
 
-### Webhook 日志
+### Webhook Logs
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/api/webhook-logs` | 日志列表，参数: `webhook_id`, `page`, `per_page` |
-| POST | `/api/webhook-logs/clear` | 清空日志，body: `{"webhook_id":1}` 或 `{}` 清全部 |
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/webhook-logs` | List logs, params: `webhook_id`, `page`, `per_page` |
+| POST | `/api/webhook-logs/clear` | Clear logs, body: `{"webhook_id":1}` or `{}` for all |
 
-### 设备
+### Device
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/api/status` | 设备状态、modem 短信数量、轮询间隔 |
-| GET | `/api/modem/status` | AT 命令查询：信号强度、网络注册、运营商、SIM 状态、IMEI |
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/status` | Device status, modem SMS count, poll interval |
+| GET | `/api/modem/status` | AT command query: signal, network registration, operator, SIM status, IMEI |
 
-## E3372 部署说明
+## E3372 Setup
 
-Huawei E3372 插入 Linux 后默认以 USB 大容量存储模式（产品 ID `14fe`）出现，需要通过 `usb_modeswitch` 切换到 modem 模式（产品 ID `1506`）才会出现 `/dev/ttyUSB*` 设备。
+When plugged into Linux, the Huawei E3372 defaults to USB mass storage mode (product ID `14fe`). `usb_modeswitch` must switch it to modem mode (product ID `1506`) before `/dev/ttyUSB*` devices appear.
 
-项目仓库中提供了 `e3372-deploy.sh` 部署脚本（针对 Unraid），一键完成：
+The repository includes `e3372-deploy.sh` (targeting Unraid) which automates:
 
-- udev 规则配置（热插拔自动切换）
-- 开机等待切换脚本（开机时设备已插着的场景）
-- go 文件自动配置（Unraid 开机自动执行）
-- flock 互斥锁（防止并发切换冲突）
+- udev rule configuration (automatic mode-switch on hot-plug)
+- Boot wait script (for devices already connected at boot)
+- go file configuration (Unraid auto-run on boot)
+- flock mutex (prevents concurrent mode-switch conflicts)
 
 ```bash
 chmod +x e3372-deploy.sh
 ./e3372-deploy.sh
 ```
 
-## 项目结构
+## Project Structure
 
 ```
 sms-gateway/
-├── app.py              # 主应用（Flask + 轮询线程 + API）
+├── app.py              # Main application (Flask + polling thread + API)
 ├── templates/
-│   ├── login.html      # 登录页面
-│   └── index.html      # 管理控制台（单页应用）
-├── requirements.txt    # Python 依赖
+│   ├── login.html      # Login page
+│   └── index.html      # Admin console (single-page app)
+├── requirements.txt    # Python dependencies
 ├── Dockerfile
 ├── docker-compose.yml
-├── e3372-deploy.sh     # E3372 Unraid 部署脚本（可选）
-└── data/               # 运行时生成
+├── e3372-deploy.sh     # E3372 Unraid setup script (optional)
+└── data/               # Generated at runtime
     ├── sms.db
     └── webhooks.db
 ```

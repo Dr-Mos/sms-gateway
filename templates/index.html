@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SMS Gateway · 控制台</title>
+<title>SMS Gateway</title>
+<script src="/static/i18n.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600;700&display=swap');
 
@@ -230,36 +231,37 @@
   <div class="topbar">
     <div class="topbar-left"><span class="icon">📡</span> SMS Gateway</div>
     <div class="topbar-right">
-      <div id="statusChip" class="status-chip offline"><span class="dot"></span><span id="statusText">检测中...</span></div>
-      <button class="icon-btn" onclick="refreshAll()" title="刷新">🔄</button>
-      <button class="icon-btn" onclick="logout()" title="退出">⏻</button>
+      <div id="statusChip" class="status-chip offline"><span class="dot"></span><span id="statusText"></span></div>
+      <select id="langSwitch" onchange="switchLang(this.value)" style="padding:4px 8px;font-size:12px;font-family:var(--mono);background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text-dim);cursor:pointer;outline:none;"></select>
+      <button class="icon-btn" onclick="refreshAll()" data-i18n-title="btnRefresh">🔄</button>
+      <button class="icon-btn" onclick="logout()" data-i18n-title="btnLogout">⏻</button>
     </div>
   </div>
 
   <div class="main">
     <div class="tabs">
-      <button class="tab active" data-tab="send" onclick="switchTab('send')">📤 发送短信</button>
-      <button class="tab" data-tab="inbox" onclick="switchTab('inbox')">📥 收件箱</button>
-      <button class="tab" data-tab="outbox" onclick="switchTab('outbox')">📤 发件箱</button>
-      <button class="tab" data-tab="webhooks" onclick="switchTab('webhooks')">🔗 Webhooks</button>
-      <button class="tab" data-tab="logs" onclick="switchTab('logs')">📋 执行日志</button>
-      <button class="tab" data-tab="modem" onclick="switchTab('modem')">📶 Modem 状态</button>
+      <button class="tab active" data-tab="send"     onclick="switchTab('send')"     data-i18n="tabSend"></button>
+      <button class="tab"        data-tab="inbox"    onclick="switchTab('inbox')"    data-i18n="tabInbox"></button>
+      <button class="tab"        data-tab="outbox"   onclick="switchTab('outbox')"   data-i18n="tabOutbox"></button>
+      <button class="tab"        data-tab="webhooks" onclick="switchTab('webhooks')" data-i18n="tabWebhooks"></button>
+      <button class="tab"        data-tab="logs"     onclick="switchTab('logs')"     data-i18n="tabLogs"></button>
+      <button class="tab"        data-tab="modem"    onclick="switchTab('modem')"    data-i18n="tabModem"></button>
     </div>
 
     <!-- ── Send SMS ── -->
     <div id="panel-send" class="panel active">
       <div class="card">
-        <div class="card-title">发送新短信</div>
+        <div class="card-title" data-i18n="sendTitle"></div>
         <div class="form-group">
-          <label>接收号码</label>
+          <label data-i18n="sendPhoneLabel"></label>
           <input type="text" id="sendPhone" placeholder="+8613800138000">
         </div>
         <div class="form-group">
-          <label>短信内容</label>
-          <textarea id="sendText" rows="4" placeholder="输入短信内容..."></textarea>
+          <label data-i18n="sendContentLabel"></label>
+          <textarea id="sendText" rows="4" data-i18n-placeholder="sendContentPlaceholder"></textarea>
         </div>
         <div class="btn-row">
-          <button class="btn btn-primary" id="sendBtn" onclick="doSend()">发送短信</button>
+          <button class="btn btn-primary" id="sendBtn" onclick="doSend()" data-i18n="sendBtn"></button>
         </div>
       </div>
     </div>
@@ -267,7 +269,7 @@
     <!-- ── Inbox ── -->
     <div id="panel-inbox" class="panel">
       <div class="card">
-        <div class="card-title">收到的短信</div>
+        <div class="card-title" data-i18n="inboxTitle"></div>
         <div id="inboxList" class="msg-list"></div>
         <div id="inboxPagination" class="pagination"></div>
       </div>
@@ -276,7 +278,7 @@
     <!-- ── Outbox ── -->
     <div id="panel-outbox" class="panel">
       <div class="card">
-        <div class="card-title">已发送的短信</div>
+        <div class="card-title" data-i18n="outboxTitle"></div>
         <div id="outboxList" class="msg-list"></div>
         <div id="outboxPagination" class="pagination"></div>
       </div>
@@ -286,8 +288,8 @@
     <div id="panel-webhooks" class="panel">
       <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-          <div class="card-title" style="margin-bottom:0;">Webhook 转发配置</div>
-          <button class="btn btn-primary btn-sm" onclick="showAddWebhook()">+ 添加</button>
+          <div class="card-title" style="margin-bottom:0;" data-i18n="webhookTitle"></div>
+          <button class="btn btn-primary btn-sm" onclick="showAddWebhook()" data-i18n="addWebhook"></button>
         </div>
         <div id="webhookList"></div>
       </div>
@@ -297,12 +299,10 @@
     <div id="panel-logs" class="panel">
       <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-          <div class="card-title" style="margin-bottom:0;">Webhook 执行日志</div>
+          <div class="card-title" style="margin-bottom:0;" data-i18n="logsTitle"></div>
           <div class="btn-row">
-            <select id="logFilterWebhook" onchange="loadLogs(1)" style="padding:6px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:12px;font-family:var(--sans);">
-              <option value="">全部 Webhooks</option>
-            </select>
-            <button class="btn btn-danger btn-sm" onclick="clearLogs()">清空日志</button>
+            <select id="logFilterWebhook" onchange="loadLogs(1)" style="padding:6px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:12px;font-family:var(--sans);"></select>
+            <button class="btn btn-danger btn-sm" onclick="clearLogs()" data-i18n="clearLogs"></button>
           </div>
         </div>
         <div id="logList"></div>
@@ -314,27 +314,27 @@
     <div id="panel-modem" class="panel">
       <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-          <div class="card-title" style="margin-bottom:0;">Modem 信息</div>
-          <button class="btn btn-secondary btn-sm" onclick="loadModem()">刷新</button>
+          <div class="card-title" style="margin-bottom:0;" data-i18n="modemInfoTitle"></div>
+          <button class="btn btn-secondary btn-sm" onclick="loadModem()" data-i18n="modemRefresh"></button>
         </div>
-        <div id="modemAtContent"><div style="color:var(--text-dim);font-size:13px;">加载中...</div></div>
+        <div id="modemAtContent"></div>
       </div>
       <div class="card">
-        <div class="card-title">设备状态</div>
+        <div class="card-title" data-i18n="modemDeviceTitle"></div>
         <div class="setting-row">
-          <span class="setting-label">短信串口 (TTY_DEVICE)</span>
+          <span class="setting-label" data-i18n="modemTtySmsLabel"></span>
           <span class="setting-value" id="settingDevice">-</span>
         </div>
         <div class="setting-row">
-          <span class="setting-label">设备状态</span>
+          <span class="setting-label" data-i18n="modemDeviceLabel"></span>
           <span class="setting-value" id="settingDeviceStatus">-</span>
         </div>
         <div class="setting-row">
-          <span class="setting-label">轮询间隔</span>
+          <span class="setting-label" data-i18n="modemPollLabel"></span>
           <span class="setting-value" id="settingPoll">-</span>
         </div>
         <div class="setting-row">
-          <span class="setting-label">Modem 存储短信数</span>
+          <span class="setting-label" data-i18n="modemSmsCountLabel"></span>
           <span class="setting-value" id="settingModemCount">-</span>
         </div>
       </div>
@@ -346,34 +346,107 @@
   <!-- ── Webhook Modal ── -->
   <div class="modal-overlay" id="whModal">
     <div class="modal">
-      <h3 id="whModalTitle">添加 Webhook</h3>
+      <h3 id="whModalTitle"></h3>
       <input type="hidden" id="whEditId">
       <div class="form-group">
-        <label>名称</label>
-        <input type="text" id="whName" placeholder="例如：Bark 通知">
+        <label data-i18n="webhookNameLabel"></label>
+        <input type="text" id="whName" data-i18n-placeholder="webhookNamePlaceholder">
       </div>
       <div class="form-group">
-        <label>Curl 模板 <span style="color:var(--text-faint);font-weight:400;">（占位符：##FROM## ##TO## ##CONTENT##）</span></label>
+        <label data-i18n-html="webhookTemplateLabel"></label>
         <textarea id="whCurl" rows="6" style="font-size:12px;" placeholder='curl -X POST -H "Content-Type: application/json" -d &apos;{"title":"##FROM##","body":"##CONTENT##"}&apos; https://example.com/webhook'></textarea>
       </div>
       <div class="form-group">
-        <label>快捷模板</label>
+        <label data-i18n="webhookPresetsLabel"></label>
         <div class="btn-row" style="flex-wrap:wrap;">
           <button class="btn btn-secondary btn-sm" onclick="fillPreset('bark')">Bark</button>
           <button class="btn btn-secondary btn-sm" onclick="fillPreset('ntfy')">ntfy</button>
-          <button class="btn btn-secondary btn-sm" onclick="fillPreset('wecom')">企业微信机器人</button>
-          <button class="btn btn-secondary btn-sm" onclick="fillPreset('dingtalk')">钉钉机器人</button>
-          <button class="btn btn-secondary btn-sm" onclick="fillPreset('generic')">通用 JSON POST</button>
+          <button class="btn btn-secondary btn-sm" onclick="fillPreset('wecom')"  data-i18n="presetWecom"></button>
+          <button class="btn btn-secondary btn-sm" onclick="fillPreset('dingtalk')" data-i18n="presetDingtalk"></button>
+          <button class="btn btn-secondary btn-sm" onclick="fillPreset('generic')" data-i18n="presetGeneric"></button>
         </div>
       </div>
       <div class="btn-row" style="margin-top:20px;">
-        <button class="btn btn-primary" onclick="saveWebhook()">保存</button>
-        <button class="btn btn-secondary" onclick="closeWhModal()">取消</button>
+        <button class="btn btn-primary"   onclick="saveWebhook()" data-i18n="btnSave"></button>
+        <button class="btn btn-secondary" onclick="closeWhModal()" data-i18n="btnCancel"></button>
       </div>
     </div>
   </div>
 
 <script>
+function detectLocale() {
+  const saved = localStorage.getItem('lang');
+  if (saved && LOCALES[saved]) return [saved, LOCALES[saved]];
+  const langs = navigator.languages?.length ? navigator.languages : [navigator.language || 'en'];
+  for (const lang of langs) {
+    if (LOCALES[lang]) return [lang, LOCALES[lang]];
+    const parts = lang.split('-');
+    for (let i = parts.length - 1; i > 0; i--) {
+      const tag = parts.slice(0, i).join('-');
+      if (LOCALES[tag]) return [tag, LOCALES[tag]];
+    }
+    const prefix = parts[0];
+    const key = Object.keys(LOCALES).find(k => k.split('-')[0] === prefix);
+    if (key) return [key, LOCALES[key]];
+  }
+  return ['en', LOCALES['en']];
+}
+let [_langKey, _locale] = detectLocale();
+let UI = _locale.UI;
+function tErr(code) { return _locale.ERR[code] || code; }
+
+function switchLang(key) {
+  if (!LOCALES[key]) return;
+  _langKey = key;
+  _locale = LOCALES[key];
+  UI = _locale.UI;
+  localStorage.setItem('lang', key);
+  document.documentElement.lang = key;
+  applyI18n();
+  // Re-render current tab content with new language
+  loadStatus();
+  if (currentTab === 'inbox')    loadMessages('incoming', inboxPage);
+  if (currentTab === 'outbox')   loadMessages('outgoing', outboxPage);
+  if (currentTab === 'webhooks') loadWebhooks();
+  if (currentTab === 'logs')     { loadLogFilter(); loadLogs(logPage); }
+  if (currentTab === 'modem')    loadModem();
+}
+
+function applyI18n() {
+  document.title = UI.pageTitle;
+  document.documentElement.lang = _langKey;
+  // Build / sync language switcher
+  const langSel = document.getElementById('langSwitch');
+  langSel.innerHTML = Object.entries(LOCALES).map(([k, v]) =>
+    `<option value="${k}"${k === _langKey ? ' selected' : ''}>${v.title}</option>`
+  ).join('');
+
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const v = UI[el.dataset.i18n];
+    if (v !== undefined) el.textContent = v;
+  });
+  document.querySelectorAll('[data-i18n-html]').forEach(el => {
+    const v = UI[el.dataset.i18nHtml];
+    if (v !== undefined) el.innerHTML = v;
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+    const v = UI[el.dataset.i18nPlaceholder];
+    if (v !== undefined) el.placeholder = v;
+  });
+  document.querySelectorAll('[data-i18n-title]').forEach(el => {
+    const v = UI[el.dataset.i18nTitle];
+    if (v !== undefined) el.title = v;
+  });
+  // Initial status chip text
+  document.getElementById('statusText').textContent = UI.detecting;
+  // Log filter initial option
+  const sel = document.getElementById('logFilterWebhook');
+  if (!sel.options.length) sel.innerHTML = `<option value="">${UI.allWebhooks}</option>`;
+  // Modem loading placeholder
+  document.getElementById('modemAtContent').innerHTML =
+    `<div style="color:var(--text-dim);font-size:13px;">${UI.modemLoading}</div>`;
+}
+
 let currentTab = 'send';
 let inboxPage = 1, outboxPage = 1, logPage = 1;
 const PER_PAGE = 20;
@@ -409,14 +482,13 @@ async function loadStatus() {
   const data = await api('/api/status');
   if (!data) return;
   const chip = document.getElementById('statusChip');
-  const text = document.getElementById('statusText');
   chip.className = data.device_available ? 'status-chip online' : 'status-chip offline';
-  text.textContent = data.device_available ? '设备在线' : '设备离线';
+  document.getElementById('statusText').textContent = data.device_available ? UI.online : UI.offline;
   document.getElementById('settingDevice').textContent = data.device;
-  document.getElementById('settingDeviceStatus').textContent = data.device_available ? '在线 ✓' : '离线 ✗';
-  document.getElementById('settingPoll').textContent = data.poll_interval + 's';
+  document.getElementById('settingDeviceStatus').textContent = data.device_available ? UI.deviceOnline : UI.deviceOffline;
+  document.getElementById('settingPoll').textContent = data.poll_interval + UI.pollUnit;
   const cnt = data.modem_sms_count;
-  document.getElementById('settingModemCount').textContent = cnt != null ? cnt + ' 条' : '-';
+  document.getElementById('settingModemCount').textContent = cnt != null ? UI.msgCount(cnt) : '-';
 }
 
 // ── Modem AT Status ──
@@ -430,16 +502,17 @@ async function loadModem() {
 function renderModemAt(data) {
   const el = document.getElementById('modemAtContent');
   if (!data.available) {
-    el.innerHTML = '<div style="background:var(--orange-dim);border:1px solid rgba(251,146,60,0.25);border-radius:var(--radius);padding:12px 16px;color:var(--orange);font-size:13px;">⚠️ TTY_AT 未配置或设备不可用。请在容器环境变量中设置 <code style="font-family:var(--mono);">TTY_AT</code>（E3372 通常为 <code style="font-family:var(--mono);">/dev/ttyUSB0</code>）并重启容器。</div>';
+    el.innerHTML = `<div style="background:var(--orange-dim);border:1px solid rgba(251,146,60,0.25);border-radius:var(--radius);padding:12px 16px;color:var(--orange);font-size:13px;">${UI.modemTtyAtWarning}</div>`;
     return;
   }
   const sigPct = data.signal_pct ?? 0;
   const sigDbm = data.signal_dbm != null ? data.signal_dbm + ' dBm' : 'N/A';
   const sigColor = sigPct > 60 ? 'var(--green)' : sigPct > 30 ? 'var(--orange)' : 'var(--danger)';
+  const netText = _locale.NET_STAT[data.network_status] || data.network_status || 'N/A';
   el.innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
       <div>
-        <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">信号强度</div>
+        <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">${UI.modemSignal}</div>
         <div style="display:flex;align-items:center;gap:10px;">
           <div style="flex:1;height:8px;background:var(--surface3);border-radius:4px;overflow:hidden;">
             <div style="height:100%;width:${sigPct}%;background:${sigColor};border-radius:4px;transition:width 0.5s;"></div>
@@ -448,19 +521,19 @@ function renderModemAt(data) {
         </div>
       </div>
       <div>
-        <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">网络注册</div>
-        <span style="font-size:13px;color:${data.network_registered ? 'var(--green)' : 'var(--orange)'};">${esc(data.network_status || 'N/A')}</span>
+        <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">${UI.modemNetwork}</div>
+        <span style="font-size:13px;color:${data.network_registered ? 'var(--green)' : 'var(--orange)'};">${esc(netText)}</span>
       </div>
       <div>
-        <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">运营商</div>
+        <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">${UI.modemOperator}</div>
         <span style="font-family:var(--mono);font-size:13px;">${esc(data.operator || '-')}</span>
       </div>
       <div>
-        <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">SIM 状态</div>
+        <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">${UI.modemSim}</div>
         <span style="font-size:13px;color:${data.sim_ready ? 'var(--green)' : 'var(--danger)'};">${esc(data.sim_status || '-')}</span>
       </div>
       <div>
-        <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">IMEI</div>
+        <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">${UI.modemImei}</div>
         <span style="font-family:var(--mono);font-size:12px;color:var(--text-dim);">${esc(data.imei || '-')}</span>
       </div>
     </div>`;
@@ -470,22 +543,22 @@ function renderModemAt(data) {
 async function doSend() {
   const phone = document.getElementById('sendPhone').value.trim();
   const text = document.getElementById('sendText').value.trim();
-  if (!phone || !text) { toast('请填写号码和内容', 'error'); return; }
+  if (!phone || !text) { toast(tErr('phone_and_content_required'), 'error'); return; }
   const btn = document.getElementById('sendBtn');
-  btn.disabled = true; btn.textContent = '发送中...';
+  btn.disabled = true; btn.textContent = UI.sendBtnLoading;
   const data = await api('/api/sms/send', { method:'POST', body:JSON.stringify({phone, text}) });
-  btn.disabled = false; btn.textContent = '发送短信';
-  if (data?.ok) { toast('短信发送成功','success'); document.getElementById('sendText').value = ''; }
-  else toast(data?.error || '发送失败', 'error');
+  btn.disabled = false; btn.textContent = UI.sendBtn;
+  if (data?.ok) { toast(UI.sendOk, 'success'); document.getElementById('sendText').value = ''; }
+  else toast(tErr(data?.error) || tErr('send_failed'), 'error');
 }
 
 // ── Messages ──
 function renderMessages(cid, messages) {
   const el = document.getElementById(cid);
-  if (!messages.length) { el.innerHTML = '<div class="empty"><span class="icon">📭</span>暂无短信记录</div>'; return; }
+  if (!messages.length) { el.innerHTML = `<div class="empty"><span class="icon">📭</span>${UI.noMessages}</div>`; return; }
   el.innerHTML = messages.map(m => {
     const isIn = m.direction === 'incoming';
-    const time = new Date(m.created_at).toLocaleString('zh-CN');
+    const time = new Date(m.created_at).toLocaleString();
     return `<div class="msg-item">
       <div class="msg-dir ${isIn?'in':'out'}">${isIn?'📥':'📤'}</div>
       <div class="msg-body"><div class="msg-phone">${esc(m.phone)}</div><div class="msg-text">${esc(m.content)}</div></div>
@@ -499,9 +572,9 @@ function renderPagination(cid, total, page, dir) {
   if (pages <= 1) { document.getElementById(cid).innerHTML = ''; return; }
   const ps = dir === 'incoming' ? 'inboxPage' : 'outboxPage';
   let h = '';
-  if (page > 1) h += `<button class="btn btn-secondary btn-sm" onclick="${ps}=${page-1};loadMessages('${dir}',${page-1})">上一页</button>`;
-  h += `<span class="page-info">${page}/${pages} (共${total}条)</span>`;
-  if (page < pages) h += `<button class="btn btn-secondary btn-sm" onclick="${ps}=${page+1};loadMessages('${dir}',${page+1})">下一页</button>`;
+  if (page > 1) h += `<button class="btn btn-secondary btn-sm" onclick="${ps}=${page-1};loadMessages('${dir}',${page-1})">${UI.prevPage}</button>`;
+  h += `<span class="page-info">${UI.pageInfo(page, pages, total)}</span>`;
+  if (page < pages) h += `<button class="btn btn-secondary btn-sm" onclick="${ps}=${page+1};loadMessages('${dir}',${page+1})">${UI.nextPage}</button>`;
   document.getElementById(cid).innerHTML = h;
 }
 
@@ -528,7 +601,7 @@ async function loadWebhooks() {
   const data = await api('/api/webhooks');
   if (!data) return;
   const el = document.getElementById('webhookList');
-  if (!data.webhooks.length) { el.innerHTML = '<div class="empty"><span class="icon">🔗</span>暂未配置 Webhook<br>点击上方按钮创建</div>'; return; }
+  if (!data.webhooks.length) { el.innerHTML = `<div class="empty"><span class="icon">🔗</span>${UI.noWebhooks}</div>`; return; }
   window._whData = {};
   data.webhooks.forEach(w => window._whData[w.id] = w);
   el.innerHTML = data.webhooks.map(w => {
@@ -538,16 +611,16 @@ async function loadWebhooks() {
       <div class="toggle ${w.enabled?'on':''}" onclick="toggleWh(${w.id},${w.enabled?0:1})"></div>
       <div class="wh-info"><div class="wh-name">${esc(w.name)}</div><div class="wh-url">${esc(durl)}</div></div>
       <div class="wh-actions">
-        <button class="btn btn-secondary btn-sm" onclick="testWh(${w.id})">测试</button>
-        <button class="btn btn-secondary btn-sm" onclick="editWh(${w.id})">编辑</button>
-        <button class="btn btn-danger btn-sm" onclick="delWh(${w.id},'${esc(w.name)}')">删除</button>
+        <button class="btn btn-secondary btn-sm" onclick="testWh(${w.id})">${UI.webhookBtnTest}</button>
+        <button class="btn btn-secondary btn-sm" onclick="editWh(${w.id})">${UI.webhookBtnEdit}</button>
+        <button class="btn btn-danger btn-sm" onclick="delWh(${w.id},'${esc(w.name)}')">${UI.webhookBtnDelete}</button>
       </div>
     </div>`}).join('');
 }
 
 function showAddWebhook() {
   document.getElementById('whEditId').value = '';
-  document.getElementById('whModalTitle').textContent = '添加 Webhook';
+  document.getElementById('whModalTitle').textContent = UI.addWebhookModalTitle;
   document.getElementById('whName').value = '';
   document.getElementById('whCurl').value = '';
   document.getElementById('whModal').classList.add('show');
@@ -555,7 +628,7 @@ function showAddWebhook() {
 function editWh(id) {
   const w = window._whData[id]; if (!w) return;
   document.getElementById('whEditId').value = id;
-  document.getElementById('whModalTitle').textContent = '编辑 Webhook';
+  document.getElementById('whModalTitle').textContent = UI.editWebhookModalTitle;
   document.getElementById('whName').value = w.name;
   document.getElementById('whCurl').value = w.curl_template;
   document.getElementById('whModal').classList.add('show');
@@ -566,22 +639,22 @@ async function saveWebhook() {
   const id = document.getElementById('whEditId').value;
   const name = document.getElementById('whName').value.trim();
   const curl_template = document.getElementById('whCurl').value.trim();
-  if (!name || !curl_template) { toast('名称和模板必填','error'); return; }
+  if (!name || !curl_template) { toast(UI.webhookRequired, 'error'); return; }
   if (id) await api(`/api/webhooks/${id}`, {method:'PUT', body:JSON.stringify({name, curl_template})});
   else await api('/api/webhooks', {method:'POST', body:JSON.stringify({name, curl_template})});
-  closeWhModal(); toast('已保存','success'); loadWebhooks();
+  closeWhModal(); toast(UI.webhookSaved, 'success'); loadWebhooks();
 }
 
 async function delWh(id, name) {
-  if (!confirm(`确定删除「${name}」？`)) return;
-  await api(`/api/webhooks/${id}`, {method:'DELETE'}); toast('已删除','success'); loadWebhooks();
+  if (!confirm(UI.confirmDelete(name))) return;
+  await api(`/api/webhooks/${id}`, {method:'DELETE'}); toast(UI.webhookDeleted, 'success'); loadWebhooks();
 }
 async function toggleWh(id, en) { await api(`/api/webhooks/${id}`, {method:'PUT', body:JSON.stringify({enabled:!!en})}); loadWebhooks(); }
 async function testWh(id) {
-  toast('正在测试...','info');
+  toast(UI.webhookTesting, 'info');
   const d = await api(`/api/webhooks/${id}/test`, {method:'POST'});
-  if (d?.ok) toast(`测试成功 (HTTP ${d.status_code})`,'success');
-  else toast('测试失败: '+(d?.error||'未知'), 'error');
+  if (d?.ok) toast(UI.webhookTestOk(d.status_code), 'success');
+  else toast(UI.webhookTestFail + tErr(d?.error || 'unknown'), 'error');
 }
 
 // ── Webhook Logs ──
@@ -590,10 +663,8 @@ async function loadLogFilter() {
   if (!data) return;
   const sel = document.getElementById('logFilterWebhook');
   const cur = sel.value;
-  sel.innerHTML = '<option value="">全部 Webhooks</option>';
-  data.webhooks.forEach(w => {
-    sel.innerHTML += `<option value="${w.id}">${esc(w.name)}</option>`;
-  });
+  sel.innerHTML = `<option value="">${UI.allWebhooks}</option>`;
+  data.webhooks.forEach(w => { sel.innerHTML += `<option value="${w.id}">${esc(w.name)}</option>`; });
   sel.value = cur;
 }
 
@@ -605,9 +676,9 @@ async function loadLogs(page=1) {
   const data = await api(url);
   if (!data) return;
   const el = document.getElementById('logList');
-  if (!data.logs.length) { el.innerHTML = '<div class="empty"><span class="icon">📋</span>暂无执行日志</div>'; document.getElementById('logPagination').innerHTML=''; return; }
+  if (!data.logs.length) { el.innerHTML = `<div class="empty"><span class="icon">📋</span>${UI.noLogs}</div>`; document.getElementById('logPagination').innerHTML=''; return; }
   el.innerHTML = data.logs.map((l, idx) => {
-    const time = new Date(l.executed_at).toLocaleString('zh-CN');
+    const time = new Date(l.executed_at).toLocaleString();
     const badge = l.trigger_type === 'test' ? 'test' : (l.success ? 'ok' : 'fail');
     const badgeText = l.trigger_type === 'test' ? 'TEST' : (l.success ? 'OK' : 'FAIL');
     const statusText = l.response_status ? `HTTP ${l.response_status}` : (l.error_message || 'N/A');
@@ -617,21 +688,20 @@ async function loadLogs(page=1) {
         <span style="font-size:11px;color:var(--text-faint);font-family:var(--mono);">${time}</span>
       </div>
       <div class="log-detail">
-        <dt>触发</dt><dd>${esc(l.sms_phone || '-')} → ${esc(l.trigger_type)}</dd>
-        <dt>请求</dt><dd>${esc(l.request_method)} ${esc(l.request_url)}</dd>
-        <dt>状态</dt><dd>${esc(statusText)}</dd>
+        <dt>${UI.logTrigger}</dt><dd>${esc(l.sms_phone || '-')} → ${esc(l.trigger_type)}</dd>
+        <dt>${UI.logRequest}</dt><dd>${esc(l.request_method)} ${esc(l.request_url)}</dd>
+        <dt>${UI.logStatus}</dt><dd>${esc(statusText)}</dd>
       </div>
-      <button class="log-toggle-detail" onclick="toggleLogDetail(this)">展开详情 ▾</button>
-      <div class="log-extra" id="logExtra${idx}"><strong>SMS内容:</strong> ${esc(l.sms_content||'-')}\n\n<strong>请求Headers:</strong> ${esc(l.request_headers||'-')}\n\n<strong>请求Body:</strong> ${esc(l.request_body||'-')}\n\n<strong>响应Body:</strong> ${esc(l.response_body||'-')}\n\n<strong>错误信息:</strong> ${esc(l.error_message||'无')}</div>
+      <button class="log-toggle-detail" onclick="toggleLogDetail(this)">${UI.logExpand}</button>
+      <div class="log-extra" id="logExtra${idx}"><strong>${UI.logSmsContent}</strong> ${esc(l.sms_content||'-')}\n\n<strong>${UI.logReqHeaders}</strong> ${esc(l.request_headers||'-')}\n\n<strong>${UI.logReqBody}</strong> ${esc(l.request_body||'-')}\n\n<strong>${UI.logRespBody}</strong> ${esc(l.response_body||'-')}\n\n<strong>${UI.logError}</strong> ${esc(l.error_message||'-')}</div>
     </div>`}).join('');
 
-  // pagination
   const pages = Math.ceil(data.total / PER_PAGE);
   let ph = '';
   if (pages > 1) {
-    if (page > 1) ph += `<button class="btn btn-secondary btn-sm" onclick="loadLogs(${page-1})">上一页</button>`;
-    ph += `<span class="page-info">${page}/${pages} (共${data.total}条)</span>`;
-    if (page < pages) ph += `<button class="btn btn-secondary btn-sm" onclick="loadLogs(${page+1})">下一页</button>`;
+    if (page > 1) ph += `<button class="btn btn-secondary btn-sm" onclick="loadLogs(${page-1})">${UI.prevPage}</button>`;
+    ph += `<span class="page-info">${UI.pageInfo(page, pages, data.total)}</span>`;
+    if (page < pages) ph += `<button class="btn btn-secondary btn-sm" onclick="loadLogs(${page+1})">${UI.nextPage}</button>`;
   }
   document.getElementById('logPagination').innerHTML = ph;
 }
@@ -639,16 +709,15 @@ async function loadLogs(page=1) {
 function toggleLogDetail(btn) {
   const extra = btn.nextElementSibling;
   const showing = extra.classList.toggle('show');
-  btn.textContent = showing ? '收起详情 ▴' : '展开详情 ▾';
+  btn.textContent = showing ? UI.logCollapse : UI.logExpand;
 }
 
 async function clearLogs() {
   const wid = document.getElementById('logFilterWebhook').value;
-  const msg = wid ? '确定清空当前 Webhook 的日志？' : '确定清空所有 Webhook 日志？';
-  if (!confirm(msg)) return;
+  if (!confirm(wid ? UI.confirmClearOne : UI.confirmClearAll)) return;
   const body = wid ? JSON.stringify({webhook_id: parseInt(wid)}) : '{}';
   await api('/api/webhook-logs/clear', {method:'POST', body});
-  toast('日志已清空','success'); loadLogs(1);
+  toast(UI.logsCleared, 'success'); loadLogs(1);
 }
 
 // ── Misc ──
@@ -660,10 +729,11 @@ function refreshAll() {
   if (currentTab==='webhooks') loadWebhooks();
   if (currentTab==='logs') loadLogs(logPage);
   if (currentTab==='modem') loadModem();
-  toast('已刷新','info');
+  toast(UI.refreshed, 'info');
 }
 function esc(s) { if (!s) return ''; const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
 
+applyI18n();
 loadStatus();
 setInterval(loadStatus, 15000);
 setInterval(() => { if (currentTab==='inbox') loadMessages('incoming',inboxPage); }, 20000);

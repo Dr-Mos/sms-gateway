@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SMS Gateway · 登录</title>
+<title>SMS Gateway</title>
+<script src="/static/i18n.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Noto+Sans+SC:wght@400;500;700&display=swap');
 
@@ -160,20 +161,52 @@
     <div class="logo">
       <div class="logo-icon">📡</div>
       <h1>SMS Gateway</h1>
-      <p>GSM Modem 短信管理平台</p>
+      <p data-i18n-login="subtitle"></p>
     </div>
 
     <div id="error" class="error-msg"></div>
 
     <div class="field">
-      <label>访问密码</label>
-      <input type="password" id="password" placeholder="请输入密码" autocomplete="current-password" autofocus>
+      <label data-i18n-login="passwordLabel"></label>
+      <input type="password" id="password" autocomplete="current-password" autofocus data-i18n-login-placeholder="passwordPlaceholder">
     </div>
 
-    <button class="btn" id="loginBtn" onclick="doLogin()">登 录</button>
+    <button class="btn" id="loginBtn" onclick="doLogin()" data-i18n-login="loginBtn"></button>
   </div>
 
 <script>
+function detectLocale() {
+  const saved = localStorage.getItem('lang');
+  if (saved && LOCALES[saved]) return LOCALES[saved];
+  const langs = navigator.languages?.length ? navigator.languages : [navigator.language || 'en'];
+  for (const lang of langs) {
+    if (LOCALES[lang]) return LOCALES[lang];
+    const parts = lang.split('-');
+    for (let i = parts.length - 1; i > 0; i--) {
+      const tag = parts.slice(0, i).join('-');
+      if (LOCALES[tag]) return LOCALES[tag];
+    }
+    const prefix = parts[0];
+    const key = Object.keys(LOCALES).find(k => k.split('-')[0] === prefix);
+    if (key) return LOCALES[key];
+  }
+  return LOCALES['en'];
+}
+const _locale = detectLocale();
+const L = _locale.LOGIN;
+function tErr(code) { return _locale.ERR[code] || code; }
+
+// Apply login page strings
+document.title = L.pageTitle;
+document.querySelectorAll('[data-i18n-login]').forEach(el => {
+  const v = L[el.dataset.i18nLogin];
+  if (v !== undefined) el.textContent = v;
+});
+document.querySelectorAll('[data-i18n-login-placeholder]').forEach(el => {
+  const v = L[el.dataset.i18nLoginPlaceholder];
+  if (v !== undefined) el.placeholder = v;
+});
+
 document.getElementById('password').addEventListener('keydown', e => {
   if (e.key === 'Enter') doLogin();
 });
@@ -182,10 +215,10 @@ async function doLogin() {
   const btn = document.getElementById('loginBtn');
   const errEl = document.getElementById('error');
   const pwd = document.getElementById('password').value;
-  if (!pwd) { errEl.textContent = '请输入密码'; errEl.classList.add('show'); return; }
+  if (!pwd) { errEl.textContent = L.errEmpty; errEl.classList.add('show'); return; }
 
   btn.disabled = true;
-  btn.textContent = '验证中...';
+  btn.textContent = L.loginBtnLoading;
   errEl.classList.remove('show');
 
   try {
@@ -198,15 +231,15 @@ async function doLogin() {
     if (data.ok) {
       window.location.href = '/';
     } else {
-      errEl.textContent = data.error || '密码错误';
+      errEl.textContent = tErr(data.error || 'wrong_password');
       errEl.classList.add('show');
     }
   } catch(e) {
-    errEl.textContent = '网络错误';
+    errEl.textContent = L.errNetwork;
     errEl.classList.add('show');
   }
   btn.disabled = false;
-  btn.textContent = '登 录';
+  btn.textContent = L.loginBtn;
 }
 </script>
 </body>

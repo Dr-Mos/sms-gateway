@@ -417,10 +417,10 @@ def get_modem_status() -> dict:
                 m = re.search(r"\+CREG:\s*\d+,(\d+)", creg)
                 if m:
                     stat = int(m.group(1))
-                    reg_map = {0: "未注册", 1: "已注册（本地）", 2: "搜索中",
-                               3: "被拒绝", 5: "已注册（漫游）"}
+                    reg_map = {0: "not_registered", 1: "registered_home",
+                               2: "searching", 3: "rejected", 5: "registered_roaming"}
                     result["network_stat"] = stat
-                    result["network_status"] = reg_map.get(stat, f"未知({stat})")
+                    result["network_status"] = reg_map.get(stat, "unknown")
                     result["network_registered"] = stat in (1, 5)
 
                 cops = _query(ser, "AT+COPS?")
@@ -770,7 +770,7 @@ def api_login():
         session["authenticated"] = True
         session.permanent = True
         return jsonify({"ok": True})
-    return jsonify({"ok": False, "error": "密码错误"}), 401
+    return jsonify({"ok": False, "error": "wrong_password"}), 401
 
 
 @app.route("/api/logout", methods=["POST"])
@@ -800,7 +800,7 @@ def api_send_sms():
     phone = data.get("phone", "").strip()
     text = data.get("text", "").strip()
     if not phone or not text:
-        return jsonify({"ok": False, "error": "手机号和内容不能为空"}), 400
+        return jsonify({"ok": False, "error": "phone_and_content_required"}), 400
     result = send_sms(phone, text)
     conn = _connect(SMS_DB)
     now = utcnow()
@@ -816,8 +816,8 @@ def api_send_sms():
     conn.commit()
     conn.close()
     if result["success"]:
-        return jsonify({"ok": True, "message": "短信发送成功"})
-    return jsonify({"ok": False, "error": result.get("error", "发送失败")}), 500
+        return jsonify({"ok": True})
+    return jsonify({"ok": False, "error": result.get("error", "send_failed")}), 500
 
 
 @app.route("/api/sms/list", methods=["GET"])
@@ -911,7 +911,7 @@ def api_update_webhook(wid):
         params.append(1 if data["enabled"] else 0)
     if not fields:
         conn.close()
-        return jsonify({"ok": False, "error": "无更新字段"}), 400
+        return jsonify({"ok": False, "error": "no_fields_to_update"}), 400
     params.append(wid)
     conn.execute(f"UPDATE webhooks SET {','.join(fields)} WHERE id=?", params)
     conn.commit()
