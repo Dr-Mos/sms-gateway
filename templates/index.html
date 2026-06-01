@@ -221,10 +221,55 @@
   .pagination { display:flex; align-items:center; justify-content:center; gap:8px; margin-top:16px; }
   .page-info { font-size:12px; color:var(--text-dim); font-family:var(--mono); }
 
-  .setting-row { display:flex; align-items:center; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--border); }
+  .setting-row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 0; border-bottom:1px solid var(--border); }
   .setting-row:last-child { border-bottom:none; }
   .setting-label { font-size:14px; }
-  .setting-value { font-family:var(--mono); font-size:13px; color:var(--text-dim); }
+  .setting-value { font-family:var(--mono); font-size:13px; color:var(--text-dim); word-break:break-all; text-align:right; }
+
+  /* ── Modem AT grid ── */
+  .modem-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+
+  /* ── Responsive / mobile adaptation ── */
+  @media (max-width: 768px) {
+    .topbar { padding:0 14px; height:52px; }
+    .topbar-left { font-size:14px; gap:8px; }
+    .topbar-left span.icon { font-size:18px; }
+    .topbar-right { gap:8px; }
+    .main { padding:16px 14px 48px; }
+    .card { padding:18px 16px; }
+    /* Tabs scroll horizontally instead of cramming */
+    .tabs { overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
+    .tabs::-webkit-scrollbar { display:none; }
+    .tab { flex:0 0 auto; padding:9px 14px; }
+    /* Toast spans most of the screen width */
+    .toast-wrap { top:60px; right:12px; left:12px; }
+    .toast { max-width:none; }
+    /* Modem grid collapses to single column */
+    .modem-grid { grid-template-columns:1fr; gap:16px; }
+  }
+
+  @media (max-width: 520px) {
+    /* Hide brand text label on very small screens to save space */
+    .topbar-left { font-size:0; gap:0; }
+    .topbar-left span.icon { font-size:20px; }
+    /* Message rows: meta drops below body */
+    .msg-item { grid-template-columns:auto 1fr; gap:10px 12px; padding:12px 14px; }
+    .msg-meta { grid-column:2; text-align:left; }
+    .msg-meta br { display:none; }
+    .msg-status { margin-right:8px; }
+    /* Webhook rows wrap so name + actions stack */
+    .wh-item { flex-wrap:wrap; }
+    .wh-info { flex:1 1 100%; order:2; }
+    .wh-actions { order:3; flex:1 1 100%; }
+    .wh-actions .btn { flex:1; justify-content:center; }
+    /* Webhook log detail collapses label/value into a single column */
+    .log-detail { grid-template-columns:1fr; gap:2px 0; }
+    .log-detail dt { margin-top:6px; }
+    .log-header { flex-wrap:wrap; gap:4px; }
+    /* Modal fills the screen with a small margin */
+    .modal { width:100%; padding:22px 18px; }
+    .pagination { flex-wrap:wrap; }
+  }
 </style>
 </head>
 <body>
@@ -510,7 +555,7 @@ function renderModemAt(data) {
   const sigColor = sigPct > 60 ? 'var(--green)' : sigPct > 30 ? 'var(--orange)' : 'var(--danger)';
   const netText = _locale.NET_STAT[data.network_status] || data.network_status || 'N/A';
   el.innerHTML = `
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+    <div class="modem-grid">
       <div>
         <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">${UI.modemSignal}</div>
         <div style="display:flex;align-items:center;gap:10px;">

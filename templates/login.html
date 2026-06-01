@@ -32,6 +32,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    padding: 20px;
     overflow: hidden;
   }
 
@@ -54,11 +55,16 @@
   .login-card {
     position: relative;
     width: 380px;
+    max-width: 100%;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 16px;
     padding: 48px 36px 36px;
     animation: cardIn 0.5s ease-out;
+  }
+  @media (max-width: 480px) {
+    .login-card { padding: 40px 24px 28px; }
+    .login-card::before { left: 28px; right: 28px; }
   }
   @keyframes cardIn {
     from { opacity:0; transform: translateY(20px) scale(0.97); }
