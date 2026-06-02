@@ -399,7 +399,9 @@
       </div>
       <div class="form-group">
         <label data-i18n-html="webhookTemplateLabel"></label>
-        <textarea id="whCurl" rows="6" style="font-size:12px;" placeholder='curl -X POST -H "Content-Type: application/json" -d &apos;{"title":"##FROM##","body":"##CONTENT##"}&apos; https://example.com/webhook'></textarea>
+        <a id="whDocsLink" data-i18n="webhookDocsText" data-i18n-href="webhookDocsLink" target="_blank" rel="noopener"
+           style="display:inline-block;margin:0 0 8px;font-size:11px;color:var(--accent);text-decoration:none;"></a>
+        <textarea id="whCurl" rows="7" style="font-size:12px;" placeholder='POST https://example.com/webhook&#10;Content-Type: application/json&#10;&#10;{"title":"##FROM##","body":"##CONTENT_IN_JSON##"}'></textarea>
       </div>
       <div class="form-group">
         <label data-i18n="webhookPresetsLabel"></label>
@@ -481,6 +483,10 @@ function applyI18n() {
   document.querySelectorAll('[data-i18n-title]').forEach(el => {
     const v = UI[el.dataset.i18nTitle];
     if (v !== undefined) el.title = v;
+  });
+  document.querySelectorAll('[data-i18n-href]').forEach(el => {
+    const v = UI[el.dataset.i18nHref];
+    if (v !== undefined) el.href = v;
   });
   // Initial status chip text
   document.getElementById('statusText').textContent = UI.detecting;
@@ -633,11 +639,11 @@ async function loadMessages(dir, page=1) {
 
 // ── Webhooks ──
 const PRESETS = {
-  bark: `curl -X POST "https://api.day.app/YOUR_KEY_HERE/" \\\n  -H "Content-Type: application/json; charset=utf-8" \\\n  -d '{"title":"来自 ##FROM##","body":"##CONTENT##","group":"SMS"}'`,
-  ntfy: `curl -X POST \\\n  -H "Title: SMS from ##FROM##" \\\n  -d "##CONTENT##" \\\n  https://ntfy.sh/YOUR_TOPIC_HERE`,
-  wecom: `curl -X POST \\\n  -H "Content-Type: application/json" \\\n  -d '{"msgtype":"text","text":{"content":"短信通知\\n发送人: ##FROM##\\n内容: ##CONTENT##"}}' \\\n  "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=YOUR_KEY"`,
-  dingtalk: `curl -X POST \\\n  -H "Content-Type: application/json" \\\n  -d '{"msgtype":"text","text":{"content":"短信通知\\n发送人: ##FROM##\\n内容: ##CONTENT##"}}' \\\n  "https://oapi.dingtalk.com/robot/send?access_token=YOUR_TOKEN"`,
-  generic: `curl -X POST \\\n  -H "Content-Type: application/json" \\\n  -d '{"from":"##FROM##","to":"##TO##","content":"##CONTENT##"}' \\\n  "https://example.com/webhook"`,
+  bark: `POST https://api.day.app/YOUR_KEY_HERE/\nContent-Type: application/json; charset=utf-8\n\n{"title":"来自 ##FROM_IN_JSON##","body":"##CONTENT_IN_JSON##","group":"SMS"}`,
+  ntfy: `POST https://ntfy.sh/YOUR_TOPIC_HERE\nTitle: SMS from ##FROM##\n\n##CONTENT##`,
+  wecom: `POST https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=YOUR_KEY\nContent-Type: application/json\n\n{"msgtype":"text","text":{"content":"短信通知\\n发送人: ##FROM_IN_JSON##\\n内容: ##CONTENT_IN_JSON##"}}`,
+  dingtalk: `POST https://oapi.dingtalk.com/robot/send?access_token=YOUR_TOKEN\nContent-Type: application/json\n\n{"msgtype":"text","text":{"content":"短信通知\\n发送人: ##FROM_IN_JSON##\\n内容: ##CONTENT_IN_JSON##"}}`,
+  generic: `POST https://example.com/webhook\nContent-Type: application/json\n\n{"from":"##FROM_IN_JSON##","to":"##TO_IN_JSON##","content":"##CONTENT_IN_JSON##"}`,
 };
 
 function fillPreset(key) { document.getElementById('whCurl').value = PRESETS[key] || ''; }
@@ -685,8 +691,14 @@ async function saveWebhook() {
   const name = document.getElementById('whName').value.trim();
   const curl_template = document.getElementById('whCurl').value.trim();
   if (!name || !curl_template) { toast(UI.webhookRequired, 'error'); return; }
-  if (id) await api(`/api/webhooks/${id}`, {method:'PUT', body:JSON.stringify({name, curl_template})});
-  else await api('/api/webhooks', {method:'POST', body:JSON.stringify({name, curl_template})});
+  const res = id
+    ? await api(`/api/webhooks/${id}`, {method:'PUT', body:JSON.stringify({name, curl_template})})
+    : await api('/api/webhooks', {method:'POST', body:JSON.stringify({name, curl_template})});
+  if (!res || !res.ok) {
+    // Keep the modal open so the user can fix the template (or cancel).
+    toast((res && res.error) ? `${UI.webhookSaveFailed}: ${res.error}` : UI.webhookSaveFailed, 'error');
+    return;
+  }
   closeWhModal(); toast(UI.webhookSaved, 'success'); loadWebhooks();
 }
 

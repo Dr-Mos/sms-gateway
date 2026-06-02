@@ -12,7 +12,6 @@ Database split:
 import os
 import re
 import json
-import shlex
 import time
 import hashlib
 import secrets
@@ -444,107 +443,197 @@ def get_modem_status() -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Curl template engine
+# HTTP request template engine (Hurl-style)
 # ---------------------------------------------------------------------------
 
 def _substitute_template(template: str, from_phone: str, to_phone: str, content: str) -> str:
-    result = template.replace("##FROM##", from_phone)
+    # JSON-escaped variants: escape the value as a JSON string but keep the
+    # template's own surrounding quotes (so `"##CONTENT_IN_JSON##"` stays valid JSON
+    # even when the SMS contains ", \, or newlines). Replace these before the
+    # plain placeholders so the longer token wins.
+    def js(v):
+        return json.dumps(v, ensure_ascii=False)[1:-1]
+    result = template.replace("##FROM_IN_JSON##", js(from_phone))
+    result = result.replace("##TO_IN_JSON##", js(to_phone))
+    result = result.replace("##CONTENT_IN_JSON##", js(content))
+    result = result.replace("##FROM##", from_phone)
     result = result.replace("##TO##", to_phone)
     result = result.replace("##CONTENT##", content)
     return result
 
 
-def _normalize_curl(raw: str) -> str:
-    s = raw.replace("\\\n", " ").replace("\\\r\n", " ")
-
-    def replace_dollar_quote(m):
-        inner = m.group(1)
-        inner = inner.replace("\\'", "'")
-        inner = inner.replace('"', '\\"')
-        return '"' + inner + '"'
-
-    s = re.sub(r"""\$'((?:[^'\\]|\\.)*)'""", replace_dollar_quote, s)
-    s = re.sub(r'\s+', ' ', s).strip()
-    return s
+_HURL_SECTIONS = {"query", "form", "cookies", "basicauth", "options"}
+_HTTP_METHODS = {"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "TRACE", "CONNECT"}
+# A line is a header / section key-value when it starts with a valid token name
+# followed by ':'. JSON/XML/raw body lines (starting with { [ < or any line
+# without a 'name:' prefix) don't match, so the body is detected without needing
+# a blank-line separator. A section marker is [Word]; a JSON array body like
+# [1,2] starts with a digit/quote and is therefore not mistaken for a section.
+_HURL_HEADER_RE = re.compile(r"^[A-Za-z0-9!#$%&'*+.^_`|~-]+:")
+_HURL_SECTION_RE = re.compile(r"^\[[A-Za-z][\w-]*\]$")
 
 
-def _parse_curl(normalized: str) -> dict:
-    try:
-        parts = shlex.split(normalized)
-    except ValueError as e:
-        return {"error": f"Failed to parse curl: {e}"}
+def _parse_hurl(template: str) -> dict:
+    """Parse a minimal Hurl-style request definition into a request spec.
 
-    if not parts or parts[0].lower() != "curl":
-        return {"error": "Template must start with 'curl'"}
+    Layout:
+        METHOD URL
+        Header-Name: value
+        [Query] / [Form] / [Cookies] / [BasicAuth] / [Options]
+        key: value
+        request body (verbatim)
 
-    method = "GET"
-    headers = {}
-    data_body = None
-    url = None
-    i = 1
-    while i < len(parts):
-        arg = parts[i]
-        if arg in ("-X", "--request") and i + 1 < len(parts):
-            method = parts[i + 1].upper()
-            i += 2
-        elif arg in ("-H", "--header") and i + 1 < len(parts):
-            hdr = parts[i + 1]
-            if ":" in hdr:
-                key, val = hdr.split(":", 1)
-                headers[key.strip()] = val.strip()
-            i += 2
-        elif arg in ("-d", "--data", "--data-raw", "--data-binary") and i + 1 < len(parts):
-            data_body = parts[i + 1]
-            if method == "GET":
-                method = "POST"
-            i += 2
-        elif arg.startswith("http://") or arg.startswith("https://"):
-            url = arg
+    The body begins at the first line that no longer looks like a header or a
+    section (e.g. a `{...}` JSON object, or any line without a `name:` prefix).
+    A blank line may also separate the head from the body — handy when the body's
+    first line would itself look like a header.
+
+    Placeholders (##CONTENT## etc.) are left untouched here; substitution happens
+    after parsing so SMS values can never alter the request structure. Returns a
+    spec dict, or {"error": ...} for a malformed template.
+    """
+    lines = [ln.rstrip("\r") for ln in template.split("\n")]
+    n = len(lines)
+
+    # Request line = first non-empty line.
+    i = 0
+    while i < n and not lines[i].strip():
+        i += 1
+    if i >= n:
+        return {"error": "Empty request template"}
+    bits = lines[i].strip().split(None, 1)
+    if len(bits) < 2:
+        return {"error": f"First line must be 'METHOD URL', got: {lines[i].strip()!r}"}
+    method, url = bits[0].upper(), bits[1].strip()
+    if method not in _HTTP_METHODS:
+        return {"error": f"Unknown HTTP method {bits[0]!r}; the first line must be 'METHOD URL'"}
+    if not re.match(r"https?://", url, re.IGNORECASE):
+        return {"error": "URL must start with http:// or https://"}
+    i += 1
+
+    headers, params, cookies = {}, {}, {}
+    form, auth = None, None
+    verify, timeout = True, 15
+    section = None
+    body_start = None
+    while i < n:
+        s = lines[i].strip()
+        if s == "":
+            # Blank line: explicit head/body separator.
+            body_start = i + 1
+            break
+        if _HURL_SECTION_RE.match(s):
+            section = s[1:-1].strip().lower()
+            if section not in _HURL_SECTIONS:
+                return {"error": f"Unsupported section [{s[1:-1]}]"}
+            if section == "form":
+                form = {}
             i += 1
-        elif arg.startswith("-"):
-            if i + 1 < len(parts) and not parts[i + 1].startswith("-") and not parts[i + 1].startswith("http"):
-                i += 2
+            continue
+        if not _HURL_HEADER_RE.match(s):
+            # No longer a header/section line -> the body starts here.
+            body_start = i
+            break
+        k, v = s.split(":", 1)
+        k, v = k.strip(), v.strip()
+        if section is None:
+            headers[k] = v
+        elif section == "query":
+            params[k] = v
+        elif section == "form":
+            form[k] = v
+        elif section == "cookies":
+            cookies[k] = v
+        elif section == "basicauth":
+            auth = [k, v]
+        elif section == "options":
+            kl = k.lower()
+            if kl == "insecure":
+                verify = v.lower() not in ("true", "1", "yes", "on")
+            elif kl in ("max-time", "connect-timeout"):
+                try:
+                    timeout = max(1, int(float(v)))
+                except ValueError:
+                    return {"error": f"Invalid {k} value: {v!r}"}
             else:
-                i += 1
-        else:
-            if not url and ("." in arg or "/" in arg):
-                url = arg
-            i += 1
+                return {"error": f"Unsupported option: {k}"}
+        i += 1
 
-    if not url:
-        return {"error": "No URL found in curl template"}
+    body = None
+    if body_start is not None and body_start < n:
+        rest = "\n".join(lines[body_start:]).strip("\n")
+        body = rest if rest.strip() else None
 
-    return {"method": method, "url": url, "headers": headers, "body": data_body}
+    if form is not None and body is not None:
+        return {"error": "[Form] cannot be combined with a request body"}
+
+    # Default to application/json for a bare JSON body when no Content-Type given.
+    auto_json = (
+        body is not None and form is None
+        and not any(h.lower() == "content-type" for h in headers)
+        and body.lstrip()[:1] in ("{", "[")
+    )
+
+    return {
+        "method": method, "url": url, "headers": headers,
+        "params": params, "form": form, "body": body,
+        "cookies": cookies, "auth": auth,
+        "verify": verify, "timeout": timeout, "auto_json": auto_json,
+    }
 
 
-def _execute_curl_template(template: str, from_phone: str, to_phone: str, content: str) -> dict:
-    filled = _substitute_template(template, from_phone, to_phone, content)
-    normalized = _normalize_curl(filled)
+def _validate_request_template(template: str) -> str:
+    """Return an error message if the template is malformed, else ''."""
+    return _parse_hurl(template).get("error", "")
 
-    parsed = _parse_curl(normalized)
-    if "error" in parsed:
+
+def _execute_request_template(template: str, from_phone: str, to_phone: str, content: str) -> dict:
+    spec = _parse_hurl(template)
+    if "error" in spec:
         return {
-            "success": False, "error": parsed["error"],
+            "success": False, "error": spec["error"],
             "request_method": "", "request_url": "",
             "request_headers": "", "request_body": "",
             "response_status": 0, "response_body": "",
         }
 
-    method, url = parsed["method"], parsed["url"]
-    headers, data_body = parsed["headers"], parsed["body"]
+    def sub(s):
+        return _substitute_template(s, from_phone, to_phone, content)
+
+    def sub_header(s):
+        # Strip CR/LF so an SMS value can't inject extra header lines.
+        return sub(s).replace("\r", " ").replace("\n", " ")
+
+    method = spec["method"]
+    url = sub(spec["url"])
+    headers = {sub_header(k): sub_header(v) for k, v in spec["headers"].items()}
+    params = {sub(k): sub(v) for k, v in spec["params"].items()} or None
+    cookies = {sub(k): sub(v) for k, v in spec["cookies"].items()} or None
+    auth = tuple(sub(x) for x in spec["auth"]) if spec["auth"] else None
+    form = {sub(k): sub(v) for k, v in spec["form"].items()} if spec["form"] is not None else None
+    body = sub(spec["body"]) if spec["body"] is not None else None
+    if spec["auto_json"] and body is not None:
+        headers.setdefault("Content-Type", "application/json")
+
+    if form is not None:
+        data = form
+        body_log = "&".join(f"{k}={v}" for k, v in form.items())
+    else:
+        data = body.encode("utf-8") if body is not None else None
+        body_log = body or ""
 
     result = {
         "request_method": method, "request_url": url,
         "request_headers": json.dumps(headers, ensure_ascii=False) if headers else "",
-        "request_body": data_body or "",
+        "request_body": body_log,
     }
 
     try:
         resp = http_requests.request(
             method=method, url=url,
-            headers=headers if headers else None,
-            data=data_body.encode("utf-8") if data_body else None,
-            timeout=15,
+            headers=headers or None, params=params, data=data,
+            cookies=cookies, auth=auth,
+            verify=spec["verify"], timeout=spec["timeout"],
         )
         result.update({
             "success": True, "response_status": resp.status_code,
@@ -597,7 +686,7 @@ def forward_to_webhooks(message_dict: dict):
         template = hook["curl_template"]
         if not template.strip():
             continue
-        result = _execute_curl_template(template, from_phone, to_phone, content)
+        result = _execute_request_template(template, from_phone, to_phone, content)
         _log_webhook_execution(hook["id"], hook["name"], "sms",
                                from_phone, content, result)
         if result["success"]:
@@ -887,7 +976,10 @@ def api_create_webhook():
     name = data.get("name", "").strip()
     curl_template = data.get("curl_template", "").strip()
     if not name or not curl_template:
-        return jsonify({"ok": False, "error": "名称和 curl 模板不能为空"}), 400
+        return jsonify({"ok": False, "error": "名称和模板不能为空"}), 400
+    err = _validate_request_template(curl_template)
+    if err:
+        return jsonify({"ok": False, "error": err}), 400
     conn = _connect(WEBHOOK_DB)
     conn.execute("INSERT INTO webhooks(name,curl_template,enabled,created_at) VALUES(?,?,1,?)",
                  (name, curl_template, utcnow()))
@@ -900,6 +992,10 @@ def api_create_webhook():
 @login_required
 def api_update_webhook(wid):
     data = request.get_json(force=True)
+    if "curl_template" in data:
+        err = _validate_request_template(data["curl_template"].strip())
+        if err:
+            return jsonify({"ok": False, "error": err}), 400
     conn = _connect(WEBHOOK_DB)
     fields, params = [], []
     for key in ("name", "curl_template"):
@@ -938,7 +1034,7 @@ def api_test_webhook(wid):
     conn.close()
     if not hook:
         return jsonify({"ok": False, "error": "Webhook不存在"}), 404
-    result = _execute_curl_template(
+    result = _execute_request_template(
         hook["curl_template"], "+8613800138000", MODEM_PHONE,
         "这是一条测试短信 / This is a test SMS",
     )

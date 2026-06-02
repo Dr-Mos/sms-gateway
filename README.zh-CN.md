@@ -10,7 +10,7 @@
 
 - **发送短信** — 支持中文等 Unicode 内容，自动处理编码
 - **接收短信** — 后台轮询 modem，自动入库，支持长短信（分段短信）自动拼接
-- **Webhook 转发** — 收到新短信后通过自定义 curl 模板转发到 Bark、ntfy、企业微信、钉钉等任意平台
+- **Webhook 转发** — 收到新短信后通过简洁的 Hurl 风格请求模板转发到 Bark、ntfy、企业微信、钉钉等任意平台
 - **Webhook 执行日志** — 完整记录每次 webhook 的请求、响应和错误信息
 - **Modem 状态** — 通过 AT 命令实时显示信号强度、网络注册状态、运营商、SIM 状态、IMEI
 - **密码保护** — 简易登录，密码通过环境变量配置
@@ -79,35 +79,74 @@ Docker 部署时通过 `-v /dev:/dev:ro` 加 `--device-cgroup-rule='c 188:* rmw'
 
 ## Webhook 配置
 
-Webhook 使用 curl 命令模板，支持三个占位符：
+> **完整参考：** [docs/webhook-template.zh-CN.md](docs/webhook-template.zh-CN.md)
+
+Webhook 使用简洁的 Hurl 风格请求模板：
+
+```
+METHOD URL
+Header-Name: value
+[Section]
+key: value
+请求体（逐字原样）
+```
+
+第一行是 HTTP 方法和 URL，其下为请求头；从第一行"不再像请求头"的行开始
+（例如以 `{` 开头的 JSON、或任何没有 `名称:` 前缀的行）即视为请求体。也可以用
+一个空行来分隔请求体——当请求体首行本身长得像请求头时很有用。
+占位符会用收到的短信填充：
 
 | 占位符 | 说明 |
 |--------|------|
 | `##FROM##` | 发送人号码 |
 | `##TO##` | 接收端号码（即 modem 号码，取自 `MODEM_PHONE` 环境变量） |
 | `##CONTENT##` | 短信内容 |
+| `##FROM_IN_JSON##` / `##TO_IN_JSON##` / `##CONTENT_IN_JSON##` | 同样的值，但做 JSON 转义（引号、反斜杠、换行）——**写进 JSON 请求体时用这些** |
+
+替换在模板解析**之后**进行，因此短信内容只能落在"值"里，无法改变请求结构
+（不存在请求头/参数注入）。出现在请求头行里的值会被去除 `\r\n`。
+
+### 可选小节
+
+| 小节 | 用途 |
+|------|------|
+| `[Query]` | URL 查询参数（每行 `key: value`） |
+| `[Form]` | `application/x-www-form-urlencoded` 表单体 |
+| `[Cookies]` | 请求 Cookie |
+| `[BasicAuth]` | HTTP 基本认证，单行 `用户名: 密码` |
+| `[Options]` | `insecure: true`（跳过 TLS 校验）、`max-time: <秒>` |
+
+裸 JSON 请求体（以 `{` 或 `[` 开头）会自动带上 `Content-Type: application/json`。
+不支持的小节或选项会在保存 webhook 时直接报错。
 
 ### 示例模板
 
 **Bark：**
 
 ```
-curl -X POST "https://api.day.app/YOUR_KEY/" -H "Content-Type: application/json; charset=utf-8" -d '{"body":"##CONTENT##","title":"来自 ##FROM##","group":"SMS"}'
+POST https://api.day.app/YOUR_KEY/
+Content-Type: application/json; charset=utf-8
+
+{"title":"来自 ##FROM_IN_JSON##","body":"##CONTENT_IN_JSON##","group":"SMS"}
 ```
 
 **ntfy：**
 
 ```
-curl -X POST -H "Title: SMS from ##FROM##" -d "##CONTENT##" https://ntfy.sh/YOUR_TOPIC
+POST https://ntfy.sh/YOUR_TOPIC
+Title: SMS from ##FROM##
+
+##CONTENT##
 ```
 
 **企业微信机器人：**
 
 ```
-curl -X POST -H "Content-Type: application/json" -d '{"msgtype":"text","text":{"content":"短信通知\n发送人: ##FROM##\n内容: ##CONTENT##"}}' "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=YOUR_KEY"
-```
+POST https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=YOUR_KEY
+Content-Type: application/json
 
-模板支持多行（反斜杠续行）和 bash `$'...'` 引号语法。建议写成单行以避免解析问题。
+{"msgtype":"text","text":{"content":"短信通知\n发送人: ##FROM_IN_JSON##\n内容: ##CONTENT_IN_JSON##"}}
+```
 
 ## 短信处理机制
 

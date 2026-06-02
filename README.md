@@ -12,7 +12,7 @@ Compatible with Huawei E3372 and similar USB modems. Deployable on Unraid, Raspb
 
 - **Send SMS** — Unicode support (Chinese, Japanese, etc.) with automatic encoding handling
 - **Receive SMS** — Background polling of modem, auto-stored to database, automatic reassembly of multi-part messages
-- **Webhook forwarding** — Forward incoming SMS to Bark, ntfy, WeCom, DingTalk, or any platform via custom curl templates
+- **Webhook forwarding** — Forward incoming SMS to Bark, ntfy, WeCom, DingTalk, or any platform via simple Hurl-style request templates
 - **Webhook logs** — Full record of every webhook request, response, and error
 - **Modem status** — Real-time signal strength, network registration, operator, SIM status, and IMEI via AT commands
 - **Password protection** — Simple login with password configured via environment variable
@@ -81,35 +81,76 @@ When the device is absent, polling is automatically skipped and resumes when the
 
 ## Webhook Configuration
 
-Webhooks use curl command templates with three placeholders:
+> **Full reference:** [docs/webhook-template.md](docs/webhook-template.md)
+
+Webhooks are defined with a simple Hurl-inspired request template:
+
+```
+METHOD URL
+Header-Name: value
+[Section]
+key: value
+request body (verbatim)
+```
+
+The first line is the HTTP method and URL; header lines follow. The body begins
+at the first line that no longer looks like a header (e.g. a `{...}` JSON object,
+or any line without a `name:` prefix). A blank line may also be used to separate
+the body — handy when the body's first line would itself look like a header.
+Placeholders are filled in from the incoming SMS:
 
 | Placeholder | Description |
 |-------------|-------------|
 | `##FROM##` | Sender's phone number |
 | `##TO##` | Recipient number (the modem's own number, from `MODEM_PHONE`) |
 | `##CONTENT##` | SMS message content |
+| `##FROM_IN_JSON##` / `##TO_IN_JSON##` / `##CONTENT_IN_JSON##` | Same values, JSON-escaped (quotes, backslashes, newlines) — use these **inside a JSON body** |
+
+Substitution happens *after* the template is parsed, so SMS content can never
+alter the request structure (no header/parameter injection). Values placed on a
+header line have CR/LF stripped.
+
+### Optional Sections
+
+| Section | Purpose |
+|---------|---------|
+| `[Query]` | URL query parameters (`key: value` per line) |
+| `[Form]` | `application/x-www-form-urlencoded` body |
+| `[Cookies]` | Request cookies |
+| `[BasicAuth]` | HTTP Basic auth — a single `username: password` line |
+| `[Options]` | `insecure: true` (skip TLS verify), `max-time: <seconds>` |
+
+A bare JSON body (starting with `{` or `[`) gets `Content-Type: application/json`
+automatically. Unsupported sections or options are rejected when you save the webhook.
 
 ### Example Templates
 
 **Bark:**
 
 ```
-curl -X POST "https://api.day.app/YOUR_KEY/" -H "Content-Type: application/json; charset=utf-8" -d '{"body":"##CONTENT##","title":"From ##FROM##","group":"SMS"}'
+POST https://api.day.app/YOUR_KEY/
+Content-Type: application/json; charset=utf-8
+
+{"title":"From ##FROM_IN_JSON##","body":"##CONTENT_IN_JSON##","group":"SMS"}
 ```
 
 **ntfy:**
 
 ```
-curl -X POST -H "Title: SMS from ##FROM##" -d "##CONTENT##" https://ntfy.sh/YOUR_TOPIC
+POST https://ntfy.sh/YOUR_TOPIC
+Title: SMS from ##FROM##
+
+##CONTENT##
 ```
 
 **WeCom Bot:**
 
 ```
-curl -X POST -H "Content-Type: application/json" -d '{"msgtype":"text","text":{"content":"SMS\nFrom: ##FROM##\nContent: ##CONTENT##"}}' "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=YOUR_KEY"
-```
+POST https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=YOUR_KEY
+Content-Type: application/json
 
-Templates support multi-line (backslash continuation) and bash `$'...'` quoting. Single-line is recommended to avoid parsing issues.
+{"msgtype":"text","text":{"content":"SMS\nFrom: ##FROM_IN_JSON##\nContent: ##CONTENT_IN_JSON##"}}
+```
 
 ## SMS Processing
 
