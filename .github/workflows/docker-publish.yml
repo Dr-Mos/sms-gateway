@@ -10,6 +10,9 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  # Run the bundled JavaScript actions on Node.js 24 now; they otherwise default
+  # to the deprecated Node.js 20 runtime until GitHub flips the default (2026-06-16).
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   # ── On a tag push ───────────────────────────────────────────────────────────
